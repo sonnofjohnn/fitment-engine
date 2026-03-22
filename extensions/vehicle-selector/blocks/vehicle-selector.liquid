@@ -1,0 +1,887 @@
+{% assign makes_menu = linklists[block.settings.makes_menu] %}
+
+<div
+  id="vehicle-selector-{{ block.id }}"
+  class="vehicle-selector vehicle-selector--content-{{ block.settings.content_alignment }}"
+  {{ block.shopify_attributes }}
+>
+  {% if block.settings.background_image != blank %}
+    <div class="vehicle-selector__bg-image">
+      {{
+        block.settings.background_image
+        | image_url: width: 2400
+        | image_tag:
+          loading: 'lazy',
+          widths: '600, 900, 1200, 1600, 2000, 2400',
+          class: 'vehicle-selector__bg-img',
+          alt: block.settings.heading
+      }}
+    </div>
+  {% endif %}
+
+  <div class="vehicle-selector__overlay"></div>
+
+  <div class="vehicle-selector__inner vehicle-selector__inner--text-{{ block.settings.text_alignment }}">
+    {% if block.settings.heading != blank %}
+      <h2 class="vehicle-selector__heading">{{ block.settings.heading }}</h2>
+    {% endif %}
+
+    {% if block.settings.subheading != blank %}
+      <p class="vehicle-selector__subheading">{{ block.settings.subheading }}</p>
+    {% endif %}
+
+    {% if makes_menu and makes_menu.links.size > 0 %}
+      <div class="selector-grid">
+        <div class="vehicle-selector__field">
+          <label class="visually-hidden" for="make-{{ block.id }}">Vehicle make</label>
+          <select id="make-{{ block.id }}">
+            <option value="">{{ block.settings.make_placeholder }}</option>
+            {% for l in makes_menu.links %}
+              <option value="{{ l.title | handleize }}">
+                {{ l.title }}
+              </option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="vehicle-selector__field">
+          <label class="visually-hidden" for="model-{{ block.id }}">Vehicle model</label>
+          <select id="model-{{ block.id }}" disabled>
+            <option value="">{{ block.settings.model_placeholder }}</option>
+          </select>
+        </div>
+
+        <div class="vehicle-selector__field">
+          <label class="visually-hidden" for="trim-{{ block.id }}">Vehicle trim</label>
+          <select id="trim-{{ block.id }}" disabled>
+            <option value="">{{ block.settings.trim_placeholder }}</option>
+          </select>
+        </div>
+
+        {% unless block.settings.auto_redirect %}
+          <button id="goBtn-{{ block.id }}" type="button" disabled>
+            {{ block.settings.button_text }}
+          </button>
+        {% endunless %}
+      </div>
+
+      <p id="vehicle-message-{{ block.id }}" class="vehicle-selector__message" hidden></p>
+
+      <script type="application/json" id="vehicle-data-{{ block.id }}">
+        {
+          "modelPlaceholder": {{ block.settings.model_placeholder | json }},
+          "trimPlaceholder": {{ block.settings.trim_placeholder | json }},
+          "collectionSuffix": {{ block.settings.collection_suffix | json }},
+          "autoRedirect": {{ block.settings.auto_redirect | json }},
+          "verifyCollection": {{ block.settings.verify_collection_exists | json }},
+          "showMessages": {{ block.settings.show_messages | json }},
+          "allowModelFallback": {{ block.settings.allow_model_level_fallback | json }},
+          "messages": {
+            "noModels": {{ block.settings.no_models_message | json }},
+            "noTrims": {{ block.settings.no_trims_message | json }},
+            "usingModelFallback": {{ block.settings.using_model_fallback_message | json }},
+            "missingCollection": {{ block.settings.missing_collection_message | json }},
+            "verificationFailed": {{ block.settings.verification_failed_message | json }}
+          },
+          "models": {
+            {% for make_link in makes_menu.links %}
+              {% assign make_slug = make_link.title | handleize %}
+              {% capture models_menu_handle %}{{ block.settings.models_prefix }}{{ make_slug }}{% endcapture %}
+              {% assign model_menu = linklists[models_menu_handle] %}
+              "{{ make_slug }}": [
+                {% if model_menu and model_menu.links.size > 0 %}
+                  {% for model_link in model_menu.links %}
+                    {
+                      "label": {{ model_link.title | json }},
+                      "handle": {{ model_link.title | handleize | json }}
+                    }{% unless forloop.last %},{% endunless %}
+                  {% endfor %}
+                {% endif %}
+              ]{% unless forloop.last %},{% endunless %}
+            {% endfor %}
+          },
+          "trims": {
+            {% assign trim_entries_output = false %}
+            {% for make_link in makes_menu.links %}
+              {% assign make_slug = make_link.title | handleize %}
+              {% capture models_menu_handle %}{{ block.settings.models_prefix }}{{ make_slug }}{% endcapture %}
+              {% assign model_menu = linklists[models_menu_handle] %}
+
+              {% if model_menu and model_menu.links.size > 0 %}
+                {% for model_link in model_menu.links %}
+                  {% assign model_slug = model_link.title | handleize %}
+                  {% capture trims_menu_handle %}{{ block.settings.trims_prefix }}{{ make_slug }}-{{ model_slug }}{% endcapture %}
+                  {% assign trim_menu = linklists[trims_menu_handle] %}
+
+                  {% if trim_entries_output %},{% endif %}
+                  "{{ make_slug }}||{{ model_slug }}": [
+                    {% if trim_menu and trim_menu.links.size > 0 %}
+                      {% for trim_link in trim_menu.links %}
+                        {
+                          "label": {{ trim_link.title | json }},
+                          "handle": {{ trim_link.title | handleize | json }}
+                        }{% unless forloop.last %},{% endunless %}
+                      {% endfor %}
+                    {% endif %}
+                  ]
+                  {% assign trim_entries_output = true %}
+                {% endfor %}
+              {% endif %}
+            {% endfor %}
+          }
+        }
+      </script>
+
+      <script>
+        (function() {
+          const blockId = {{ block.id | json }};
+          const configEl = document.getElementById(`vehicle-data-${blockId}`);
+          if (!configEl) return;
+
+          let config;
+          try {
+            config = JSON.parse(configEl.textContent);
+          } catch (error) {
+            console.error("Vehicle Selector JSON parse error:", error);
+            console.error(configEl.textContent);
+            return;
+          }
+
+          const make = document.getElementById(`make-${blockId}`);
+          const model = document.getElementById(`model-${blockId}`);
+          const trim = document.getElementById(`trim-${blockId}`);
+          const goBtn = document.getElementById(`goBtn-${blockId}`);
+          const message = document.getElementById(`vehicle-message-${blockId}`);
+
+          if (!make || !model || !trim) return;
+
+          let useModelFallback = false;
+
+          function setMessage(text) {
+            if (!config.showMessages || !message) return;
+
+            if (!text) {
+              message.hidden = true;
+              message.textContent = "";
+              return;
+            }
+
+            message.textContent = text;
+            message.hidden = false;
+          }
+
+          function normalizeSuffix(suffix) {
+            const clean = String(suffix || "").trim().replace(/^-+/, "");
+            return clean ? `-${clean}` : "";
+          }
+
+          function resetModels() {
+            model.innerHTML = "";
+            const placeholder = document.createElement("option");
+            placeholder.value = "";
+            placeholder.textContent = config.modelPlaceholder;
+            model.appendChild(placeholder);
+            model.disabled = true;
+          }
+
+          function resetTrims() {
+            trim.innerHTML = "";
+            const placeholder = document.createElement("option");
+            placeholder.value = "";
+            placeholder.textContent = config.trimPlaceholder;
+            trim.appendChild(placeholder);
+            trim.disabled = true;
+          }
+
+          function resetButton() {
+            if (goBtn) {
+              goBtn.disabled = true;
+              goBtn.removeAttribute("data-loading");
+            }
+          }
+
+          function buildTrimKey() {
+            if (!make.value || !model.value) return null;
+            return `${make.value}||${model.value}`;
+          }
+
+          function updateButtonState() {
+            if (!goBtn) return;
+            goBtn.disabled = !(make.value && model.value);
+          }
+
+          function buildUrl() {
+            if (!make.value || !model.value) return null;
+
+            const suffix = normalizeSuffix(config.collectionSuffix);
+
+            if (trim.value) {
+              return `/collections/${make.value}-${model.value}-${trim.value}${suffix}`;
+            }
+
+            return `/collections/${make.value}-${model.value}${suffix}`;
+          }
+
+          async function redirectToCollection() {
+            const url = buildUrl();
+            if (!url) return;
+
+            setMessage("");
+
+            if (goBtn) {
+              goBtn.setAttribute("data-loading", "true");
+            }
+
+            if (config.verifyCollection) {
+              try {
+                const res = await fetch(url, {
+                  method: "HEAD",
+                  credentials: "same-origin"
+                });
+
+                if (!res.ok) {
+                  setMessage(config.messages.missingCollection);
+                  if (goBtn) goBtn.removeAttribute("data-loading");
+                  return;
+                }
+              } catch (error) {
+                setMessage(config.messages.verificationFailed);
+                if (goBtn) goBtn.removeAttribute("data-loading");
+                return;
+              }
+            }
+
+            window.location.href = url;
+          }
+
+          make.addEventListener("change", function() {
+            useModelFallback = false;
+            resetModels();
+            resetTrims();
+            resetButton();
+            setMessage("");
+
+            const modelList = config.models[make.value] || [];
+
+            if (!make.value) return;
+
+            if (!modelList.length) {
+              setMessage(config.messages.noModels);
+              return;
+            }
+
+            modelList.forEach(function(item) {
+              const opt = document.createElement("option");
+              opt.value = item.handle;
+              opt.textContent = item.label;
+              model.appendChild(opt);
+            });
+
+            model.disabled = false;
+          });
+
+          model.addEventListener("change", function() {
+            useModelFallback = false;
+            resetTrims();
+            setMessage("");
+
+            if (!make.value || !model.value) {
+              resetButton();
+              return;
+            }
+
+            const trimKey = buildTrimKey();
+            const trimList = config.trims[trimKey] || [];
+
+            updateButtonState();
+
+            if (!trimList.length) {
+              if (config.allowModelFallback) {
+                useModelFallback = true;
+                trim.disabled = true;
+                setMessage(config.messages.usingModelFallback || config.messages.noTrims);
+
+                if (config.autoRedirect) {
+                  redirectToCollection();
+                }
+                return;
+              }
+
+              setMessage(config.messages.noTrims);
+              return;
+            }
+
+            trimList.forEach(function(item) {
+              const opt = document.createElement("option");
+              opt.value = item.handle;
+              opt.textContent = item.label;
+              trim.appendChild(opt);
+            });
+
+            trim.disabled = false;
+          });
+
+          trim.addEventListener("change", function() {
+            useModelFallback = false;
+            updateButtonState();
+
+            if (trim.value && config.autoRedirect) {
+              redirectToCollection();
+            }
+          });
+
+          if (goBtn) {
+            goBtn.addEventListener("click", redirectToCollection);
+          }
+
+          resetModels();
+          resetTrims();
+          resetButton();
+        })();
+      </script>
+    {% else %}
+      <p class="vehicle-selector__message vehicle-selector__message--visible">
+        {{ block.settings.missing_makes_menu_message }}
+      </p>
+    {% endif %}
+  </div>
+</div>
+
+<style>
+  #vehicle-selector-{{ block.id }} {
+    --vs-box-bg: {{ block.settings.box_background_color }};
+    --vs-heading-color: {{ block.settings.heading_color }};
+    --vs-subheading-color: {{ block.settings.subheading_color }};
+    --vs-input-bg: {{ block.settings.input_background_color }};
+    --vs-input-text: {{ block.settings.input_text_color }};
+    --vs-input-border: {{ block.settings.input_border_color }};
+    --vs-button-bg: {{ block.settings.button_background_color }};
+    --vs-button-text: {{ block.settings.button_text_color }};
+    --vs-message-color: {{ block.settings.message_color }};
+    --vs-overlay-color: {{ block.settings.overlay_color }};
+    --vs-overlay-opacity: {{ block.settings.overlay_opacity | divided_by: 100.0 }};
+    --vs-border-radius: {{ block.settings.border_radius }}px;
+    --vs-content-max-width: {{ block.settings.content_max_width }}px;
+    --vs-padding-top: {{ block.settings.padding_top }}px;
+    --vs-padding-bottom: {{ block.settings.padding_bottom }}px;
+    --vs-padding-side: {{ block.settings.padding_side }}px;
+    --vs-heading-size: {{ block.settings.heading_size }}px;
+    --vs-subheading-size: {{ block.settings.subheading_size }}px;
+  }
+
+  #vehicle-selector-{{ block.id }}.vehicle-selector {
+    position: relative;
+    overflow: hidden;
+    padding: var(--vs-padding-top) var(--vs-padding-side) var(--vs-padding-bottom);
+    background: var(--vs-box-bg);
+    border-radius: var(--vs-border-radius);
+    border: 1px solid rgba(255,255,255,0.08);
+    box-shadow: 0 10px 30px rgba(0,0,0,0.18);
+    isolation: isolate;
+  }
+
+  #vehicle-selector-{{ block.id }} .vehicle-selector__bg-image {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+  }
+
+  #vehicle-selector-{{ block.id }} .vehicle-selector__bg-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  #vehicle-selector-{{ block.id }} .vehicle-selector__overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    background: var(--vs-overlay-color);
+    opacity: var(--vs-overlay-opacity);
+    pointer-events: none;
+  }
+
+  #vehicle-selector-{{ block.id }} .vehicle-selector__inner {
+    position: relative;
+    z-index: 2;
+    max-width: var(--vs-content-max-width);
+  }
+
+  #vehicle-selector-{{ block.id }}.vehicle-selector--content-left .vehicle-selector__inner {
+    margin-left: 0;
+    margin-right: auto;
+  }
+
+  #vehicle-selector-{{ block.id }}.vehicle-selector--content-center .vehicle-selector__inner {
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  #vehicle-selector-{{ block.id }} .vehicle-selector__inner--text-left {
+    text-align: left;
+  }
+
+  #vehicle-selector-{{ block.id }} .vehicle-selector__inner--text-center {
+    text-align: center;
+  }
+
+  #vehicle-selector-{{ block.id }} .vehicle-selector__heading {
+    margin: 0 0 10px;
+    font-size: var(--vs-heading-size);
+    line-height: 1.05;
+    font-weight: 700;
+    color: var(--vs-heading-color);
+  }
+
+  #vehicle-selector-{{ block.id }} .vehicle-selector__subheading {
+    margin: 0 0 24px;
+    font-size: var(--vs-subheading-size);
+    line-height: 1.45;
+    color: var(--vs-subheading-color);
+  }
+
+  #vehicle-selector-{{ block.id }} .selector-grid {
+    display: grid;
+    grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr) minmax(180px, 1fr) minmax(140px, auto);
+    gap: 14px;
+    align-items: stretch;
+  }
+
+  #vehicle-selector-{{ block.id }} .vehicle-selector__field {
+    min-width: 0;
+  }
+
+  #vehicle-selector-{{ block.id }} .selector-grid select,
+  #vehicle-selector-{{ block.id }} .selector-grid button {
+    width: 100%;
+    min-height: 60px;
+    padding: 0 18px;
+    border-radius: 14px;
+    font: inherit;
+    font-size: 18px;
+    line-height: 1;
+    box-sizing: border-box;
+    transition: all 0.2s ease;
+  }
+
+  #vehicle-selector-{{ block.id }} .selector-grid select {
+    background: var(--vs-input-bg);
+    color: var(--vs-input-text);
+    border: 1px solid var(--vs-input-border);
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    cursor: pointer;
+    background-image:
+      linear-gradient(45deg, transparent 50%, currentColor 50%),
+      linear-gradient(135deg, currentColor 50%, transparent 50%);
+    background-position:
+      calc(100% - 22px) calc(50% - 3px),
+      calc(100% - 16px) calc(50% - 3px);
+    background-size: 6px 6px, 6px 6px;
+    background-repeat: no-repeat;
+    padding-right: 42px;
+  }
+
+  #vehicle-selector-{{ block.id }} .selector-grid select option {
+    color: #000;
+  }
+
+  #vehicle-selector-{{ block.id }} .selector-grid button {
+    background: var(--vs-button-bg);
+    color: var(--vs-button-text);
+    border: 1px solid transparent;
+    font-weight: 700;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  #vehicle-selector-{{ block.id }} .selector-grid select:hover,
+  #vehicle-selector-{{ block.id }} .selector-grid button:hover:not(:disabled) {
+    transform: translateY(-1px);
+  }
+
+  #vehicle-selector-{{ block.id }} .selector-grid select:focus,
+  #vehicle-selector-{{ block.id }} .selector-grid button:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(255,255,255,0.12);
+  }
+
+  #vehicle-selector-{{ block.id }} .selector-grid select:disabled,
+  #vehicle-selector-{{ block.id }} .selector-grid button:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  #vehicle-selector-{{ block.id }} .selector-grid button[data-loading="true"] {
+    opacity: 0.8;
+  }
+
+  #vehicle-selector-{{ block.id }} .vehicle-selector__message {
+    margin-top: 14px;
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--vs-message-color);
+  }
+
+  #vehicle-selector-{{ block.id }} .vehicle-selector__message--visible {
+    display: block;
+  }
+
+  #vehicle-selector-{{ block.id }} .visually-hidden {
+    position: absolute !important;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  @media (max-width: 1200px) {
+    #vehicle-selector-{{ block.id }} .selector-grid {
+      grid-template-columns: 1fr 1fr;
+    }
+
+    #vehicle-selector-{{ block.id }} .selector-grid button {
+      grid-column: 1 / -1;
+    }
+  }
+
+  @media (max-width: 989px) {
+    #vehicle-selector-{{ block.id }}.vehicle-selector {
+      padding: calc(var(--vs-padding-top) * 0.8) calc(var(--vs-padding-side) * 0.8) calc(var(--vs-padding-bottom) * 0.8);
+    }
+
+    #vehicle-selector-{{ block.id }} .vehicle-selector__heading {
+      font-size: calc(var(--vs-heading-size) * 0.82);
+    }
+
+    #vehicle-selector-{{ block.id }} .vehicle-selector__subheading {
+      font-size: calc(var(--vs-subheading-size) * 0.92);
+    }
+  }
+
+  @media (max-width: 749px) {
+    #vehicle-selector-{{ block.id }}.vehicle-selector {
+      padding: 22px;
+    }
+
+    #vehicle-selector-{{ block.id }} .vehicle-selector__heading {
+      font-size: calc(var(--vs-heading-size) * 0.7);
+    }
+
+    #vehicle-selector-{{ block.id }} .vehicle-selector__subheading {
+      margin-bottom: 18px;
+      font-size: calc(var(--vs-subheading-size) * 0.9);
+    }
+
+    #vehicle-selector-{{ block.id }} .selector-grid {
+      grid-template-columns: 1fr;
+      gap: 12px;
+    }
+
+    #vehicle-selector-{{ block.id }} .selector-grid select,
+    #vehicle-selector-{{ block.id }} .selector-grid button {
+      min-height: 54px;
+      font-size: 17px;
+    }
+  }
+</style>
+
+{% schema %}
+{
+  "name": "Vehicle Selector",
+  "target": "section",
+  "settings": [
+    {
+      "type": "text",
+      "id": "heading",
+      "label": "Heading",
+      "default": "Find Your Vehicle"
+    },
+    {
+      "type": "range",
+      "id": "heading_size",
+      "label": "Heading size",
+      "min": 24,
+      "max": 90,
+      "step": 2,
+      "unit": "px",
+      "default": 64
+    },
+    {
+      "type": "text",
+      "id": "subheading",
+      "label": "Subheading",
+      "default": "Select your make, model, and trim"
+    },
+    {
+      "type": "range",
+      "id": "subheading_size",
+      "label": "Subheading size",
+      "min": 12,
+      "max": 36,
+      "step": 1,
+      "unit": "px",
+      "default": 20
+    },
+    {
+      "type": "select",
+      "id": "text_alignment",
+      "label": "Text alignment",
+      "default": "left",
+      "options": [
+        { "value": "left", "label": "Left" },
+        { "value": "center", "label": "Center" }
+      ]
+    },
+    {
+      "type": "select",
+      "id": "content_alignment",
+      "label": "Content placement",
+      "default": "left",
+      "options": [
+        { "value": "left", "label": "Left" },
+        { "value": "center", "label": "Center" }
+      ]
+    },
+    {
+      "type": "text",
+      "id": "make_placeholder",
+      "label": "Make placeholder",
+      "default": "Select Make"
+    },
+    {
+      "type": "text",
+      "id": "model_placeholder",
+      "label": "Model placeholder",
+      "default": "Select Model"
+    },
+    {
+      "type": "text",
+      "id": "trim_placeholder",
+      "label": "Trim placeholder",
+      "default": "Select Trim"
+    },
+    {
+      "type": "text",
+      "id": "button_text",
+      "label": "Button text",
+      "default": "Shop"
+    },
+    {
+      "type": "link_list",
+      "id": "makes_menu",
+      "label": "Makes menu"
+    },
+    {
+      "type": "text",
+      "id": "models_prefix",
+      "label": "Models prefix",
+      "default": "models-"
+    },
+    {
+      "type": "text",
+      "id": "trims_prefix",
+      "label": "Trims prefix",
+      "default": "trims-"
+    },
+    {
+      "type": "text",
+      "id": "collection_suffix",
+      "label": "Collection suffix",
+      "default": "coilovers"
+    },
+    {
+      "type": "checkbox",
+      "id": "allow_model_level_fallback",
+      "label": "Allow model-level fallback when no trims exist",
+      "default": true
+    },
+    {
+      "type": "checkbox",
+      "id": "auto_redirect",
+      "label": "Auto redirect",
+      "default": false
+    },
+    {
+      "type": "checkbox",
+      "id": "verify_collection_exists",
+      "label": "Verify collection exists",
+      "default": true
+    },
+    {
+      "type": "checkbox",
+      "id": "show_messages",
+      "label": "Show messages",
+      "default": true
+    },
+    {
+      "type": "color",
+      "id": "box_background_color",
+      "label": "Box background color",
+      "default": "#111111"
+    },
+    {
+      "type": "image_picker",
+      "id": "background_image",
+      "label": "Background image"
+    },
+    {
+      "type": "color",
+      "id": "overlay_color",
+      "label": "Overlay color",
+      "default": "#000000"
+    },
+    {
+      "type": "range",
+      "id": "overlay_opacity",
+      "label": "Overlay opacity",
+      "min": 0,
+      "max": 100,
+      "step": 5,
+      "unit": "%",
+      "default": 35
+    },
+    {
+      "type": "color",
+      "id": "heading_color",
+      "label": "Heading color",
+      "default": "#ffffff"
+    },
+    {
+      "type": "color",
+      "id": "subheading_color",
+      "label": "Subheading color",
+      "default": "#d9d9d9"
+    },
+    {
+      "type": "color",
+      "id": "message_color",
+      "label": "Message color",
+      "default": "#d9d9d9"
+    },
+    {
+      "type": "color",
+      "id": "input_background_color",
+      "label": "Input background color",
+      "default": "#111111"
+    },
+    {
+      "type": "color",
+      "id": "input_text_color",
+      "label": "Input text color",
+      "default": "#ffffff"
+    },
+    {
+      "type": "color",
+      "id": "input_border_color",
+      "label": "Input border color",
+      "default": "#2f2f2f"
+    },
+    {
+      "type": "color",
+      "id": "button_background_color",
+      "label": "Button background color",
+      "default": "#ffffff"
+    },
+    {
+      "type": "color",
+      "id": "button_text_color",
+      "label": "Button text color",
+      "default": "#000000"
+    },
+    {
+      "type": "range",
+      "id": "border_radius",
+      "label": "Border radius",
+      "min": 0,
+      "max": 32,
+      "step": 2,
+      "unit": "px",
+      "default": 18
+    },
+    {
+      "type": "range",
+      "id": "content_max_width",
+      "label": "Content max width",
+      "min": 600,
+      "max": 1600,
+      "step": 20,
+      "unit": "px",
+      "default": 1200
+    },
+    {
+      "type": "range",
+      "id": "padding_top",
+      "label": "Top padding",
+      "min": 12,
+      "max": 100,
+      "step": 4,
+      "unit": "px",
+      "default": 36
+    },
+    {
+      "type": "range",
+      "id": "padding_bottom",
+      "label": "Bottom padding",
+      "min": 12,
+      "max": 100,
+      "step": 4,
+      "unit": "px",
+      "default": 36
+    },
+    {
+      "type": "range",
+      "id": "padding_side",
+      "label": "Left/right padding",
+      "min": 12,
+      "max": 100,
+      "step": 4,
+      "unit": "px",
+      "default": 36
+    },
+    {
+      "type": "text",
+      "id": "no_models_message",
+      "label": "No models message",
+      "default": "No models were found for that make."
+    },
+    {
+      "type": "text",
+      "id": "no_trims_message",
+      "label": "No trims message",
+      "default": "No trims were found for that model."
+    },
+    {
+      "type": "text",
+      "id": "using_model_fallback_message",
+      "label": "Model fallback message",
+      "default": "No trims found. Showing results for this model."
+    },
+    {
+      "type": "text",
+      "id": "missing_collection_message",
+      "label": "Missing collection message",
+      "default": "That vehicle collection is not available yet."
+    },
+    {
+      "type": "text",
+      "id": "verification_failed_message",
+      "label": "Verification failed message",
+      "default": "We could not verify that collection right now."
+    },
+    {
+      "type": "text",
+      "id": "missing_makes_menu_message",
+      "label": "Missing makes menu message",
+      "default": "Please assign a makes menu in settings."
+    }
+  ]
+}
+{% endschema %}
