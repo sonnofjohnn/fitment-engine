@@ -719,19 +719,19 @@ generate SEO collections, and keep Shopify navigation in sync.
             label="Missing Attributes"
             value={stats.missingFitmentCount}
             tone="danger"
-            subtext="Current active products missing make and model"
+            subtext="Current active products missing attributes (Example. Make Model)"
           />
           <StatCard
             label="Products with Attributes"
             value={stats.assignedFitmentCount}
             tone="success"
-            subtext="Current active products with make and model"
+            subtext="Current active products with Attributes"
           />
           <StatCard
             label="Attribute Records"
             value={stats.totalVehicleCombinations}
             tone="info"
-            subtext="Rows saved in your fitment database"
+            subtext="Rows saved in your attribute database"
           />
           <StatCard
             label="Missing SEO Collections"

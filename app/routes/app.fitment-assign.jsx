@@ -259,7 +259,7 @@ export async function action({ request }) {
   if (!vehicleMake || !vehicleModel) {
     return {
       success: false,
-      message: "Make and model are required. Trim is optional.",
+      message: "Primary and Secondary attributes are required. Tertiary is optional.",
       productId,
     };
   }
@@ -326,7 +326,7 @@ export async function action({ request }) {
 
   return {
     success: true,
-    message: `Saved fitment for ${productTitle}: ${vehicleMake} / ${vehicleModel}${
+    message: `Saved attributes for ${productTitle}: ${vehicleMake} / ${vehicleModel}${
       vehicleTrim ? ` / ${vehicleTrim}` : ""
     }`,
     productId,
@@ -475,7 +475,7 @@ function ProductTableRow({
         <input
           value={make}
           onChange={handleMakeChange}
-          placeholder="Make"
+          placeholder="Primary"
           style={inputStyle}
           list={makeListId}
         />
@@ -490,7 +490,7 @@ function ProductTableRow({
         <input
           value={model}
           onChange={handleModelChange}
-          placeholder="Model"
+          placeholder="Secondary"
           style={inputStyle}
           list={modelListId}
         />
@@ -546,7 +546,7 @@ export default function FitmentAssignPage() {
   const navigation = useNavigation();
 
   return (
-    <s-page heading="Fitment Assignment" fullWidth>
+    <s-page heading="Attribute Assignment" fullWidth>
       <div style={{ padding: "16px" }}>
         <div
           style={{
@@ -558,7 +558,7 @@ export default function FitmentAssignPage() {
           }}
         >
           <div style={{ fontWeight: "600", fontSize: "18px", marginBottom: "8px" }}>
-            Search and edit product fitment
+            Search and assign product attributes
           </div>
 
           <div
@@ -577,31 +577,31 @@ export default function FitmentAssignPage() {
             </div>
 
             <div>
-              • Search products or filter by tag, then edit fitment directly in the table.
+              • Search products or filter by tag, then assign attributes directly in the table.
             </div>
 
             <div>
-              • <strong>Make and Model are required.</strong> Trim is optional.
+              • <strong>Primary and Secondary attributes are required.</strong> Tertiary is optional.
             </div>
 
             <div>
-              • Make, Model, and Trim fields support autosuggest dropdowns based on saved vehicle data.
+              • Fields support autosuggest dropdowns based on your saved attribute data.
             </div>
 
             <div>
-              • Use <strong>Fitment status</strong> to quickly find products missing a make or model.
+              • Use <strong>Attribute status</strong> to quickly find products missing required data.
             </div>
 
             <div>
-              • Click <strong>Save</strong> to apply fitment to the product.
+              • Click <strong>Save</strong> to apply attributes to the product.
             </div>
 
             <div style={{ marginTop: "8px", color: "#065f46" }}>
-              ✓ Any combination you assign and save here will automatically be added to your Vehicle Data.
+              ✓ Any combination you assign and save here will automatically be added to your Attribute Data.
             </div>
 
             <div style={{ marginTop: "6px", color: "#92400e" }}>
-              This keeps your vehicle fitment list synced without needing to manually add combinations.
+              This keeps your attribute system synced without needing to manually add combinations.
             </div>
           </div>
 
@@ -647,7 +647,7 @@ export default function FitmentAssignPage() {
               </label>
 
               <label>
-                <div style={{ marginBottom: "4px" }}>Fitment status</div>
+                <div style={{ marginBottom: "4px" }}>Attribute status</div>
                 <select
                   name="fitmentStatus"
                   defaultValue={fitmentStatus}
@@ -661,7 +661,7 @@ export default function FitmentAssignPage() {
                   }}
                 >
                   <option value="all">All products</option>
-                  <option value="missing">Missing make or model</option>
+                  <option value="missing">Missing required attributes</option>
                 </select>
               </label>
 
@@ -731,7 +731,7 @@ export default function FitmentAssignPage() {
           }}
         >
           Showing up to {pageSize} products per page.
-          {fitmentStatus === "missing" ? " Filter: Missing make or model." : ""}
+          {fitmentStatus === "missing" ? " Filter: Missing required attributes." : ""}
         </div>
 
         {products.length === 0 ? (
@@ -784,7 +784,7 @@ export default function FitmentAssignPage() {
                       width: "16%",
                     }}
                   >
-                    Current Fitment
+                    Current Attributes
                   </th>
                   <th
                     style={{
@@ -795,7 +795,7 @@ export default function FitmentAssignPage() {
                       width: "16%",
                     }}
                   >
-                    Make
+                    Primary Attribute
                   </th>
                   <th
                     style={{
@@ -806,7 +806,7 @@ export default function FitmentAssignPage() {
                       width: "16%",
                     }}
                   >
-                    Model
+                    Secondary Attribute
                   </th>
                   <th
                     style={{
@@ -817,7 +817,7 @@ export default function FitmentAssignPage() {
                       width: "16%",
                     }}
                   >
-                    Trim
+                    Tertiary Attribute
                   </th>
                   <th
                     style={{
