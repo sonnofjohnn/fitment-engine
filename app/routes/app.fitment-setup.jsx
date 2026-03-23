@@ -233,7 +233,7 @@ export default function AttributeSetup() {
           <s-grid columns="3" gap="base">
             <s-box padding="large" border="base" border-radius="large">
               <s-heading size="small">Primary Attribute</s-heading>
-              <s-paragraph>Creates <s-text>custom.vehicle_make</s-text></s-paragraph>
+              <s-paragraph>Creates <s-text>metafield for backend</s-text></s-paragraph>
               <Form method="post">
                 <input type="hidden" name="metafieldType" value="make" />
                 <s-button type="submit" {...(isSubmitting ? { loading: true } : {})}>
@@ -244,7 +244,7 @@ export default function AttributeSetup() {
 
             <s-box padding="large" border="base" border-radius="large">
               <s-heading size="small">Secondary Attribute</s-heading>
-              <s-paragraph>Creates <s-text>custom.vehicle_model</s-text></s-paragraph>
+              <s-paragraph>Creates <s-text>2nd metafield for backend</s-text></s-paragraph>
               <Form method="post">
                 <input type="hidden" name="metafieldType" value="model" />
                 <s-button type="submit" {...(isSubmitting ? { loading: true } : {})}>
@@ -255,7 +255,7 @@ export default function AttributeSetup() {
 
             <s-box padding="large" border="base" border-radius="large">
               <s-heading size="small">Tertiary Attribute</s-heading>
-              <s-paragraph>Creates <s-text>custom.vehicle_trim</s-text></s-paragraph>
+              <s-paragraph>Creates <s-text>3rd metafield for backend</s-text></s-paragraph>
               <Form method="post">
                 <input type="hidden" name="metafieldType" value="trim" />
                 <s-button type="submit" {...(isSubmitting ? { loading: true } : {})}>
