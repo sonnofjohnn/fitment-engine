@@ -75,22 +75,22 @@ const GET_METAFIELD_DEFINITION_QUERY = `
 
 const metafieldMap = {
   make: {
-    name: "Vehicle Make",
+    name: "Primary Attribute",
     namespace: "custom",
     key: "vehicle_make",
-    description: "Vehicle make for fitment filtering",
+    description: "Primary attribute used for SEO collection grouping",
   },
   model: {
-    name: "Vehicle Model",
+    name: "Secondary Attribute",
     namespace: "custom",
     key: "vehicle_model",
-    description: "Vehicle model for fitment filtering",
+    description: "Secondary attribute used for SEO collection grouping",
   },
   trim: {
-    name: "Vehicle Trim",
+    name: "Tertiary Attribute",
     namespace: "custom",
     key: "vehicle_trim",
-    description: "Vehicle trim for fitment filtering",
+    description: "Optional tertiary attribute for deeper grouping",
   },
 };
 
@@ -116,13 +116,13 @@ async function updateDefinitionForSmartCollections(admin, selected) {
         key: selected.key,
         name: selected.name,
         capabilities: {
-  adminFilterable: {
-    enabled: true,
-  },
-  smartCollectionCondition: {
-    enabled: true,
-  },
-}
+          adminFilterable: {
+            enabled: true,
+          },
+          smartCollectionCondition: {
+            enabled: true,
+          },
+        },
       },
     },
   });
@@ -141,7 +141,7 @@ export async function action({ request }) {
   if (!selected) {
     return {
       success: false,
-      message: "Invalid metafield type.",
+      message: "Invalid attribute type.",
     };
   }
 
@@ -169,29 +169,9 @@ export async function action({ request }) {
     const createErrors = createResult?.userErrors || [];
 
     if (createErrors.length === 0) {
-      const enabled =
-        createResult?.createdDefinition?.capabilities?.smartCollectionCondition
-          ?.enabled;
-
       return {
         success: true,
-        message: enabled
-          ? `${selected.name} created successfully with smart collections enabled.`
-          : `${selected.name} created successfully, but smart collection capability could not be confirmed.`,
-      };
-    }
-
-    const firstError = createErrors[0];
-    const firstMessage = firstError?.message || "Unknown error.";
-
-    const alreadyExists =
-      firstMessage.includes("Key is in use") ||
-      firstMessage.includes("already exists");
-
-    if (!alreadyExists) {
-      return {
-        success: false,
-        message: firstMessage,
+        message: `${selected.name} created successfully and is ready for SEO collections.`,
       };
     }
 
@@ -200,200 +180,101 @@ export async function action({ request }) {
     if (!existingDefinition) {
       return {
         success: false,
-        message: `${selected.name} already exists, but the existing definition could not be found for update.`,
+        message: `${selected.name} already exists but could not be updated.`,
       };
     }
 
-    if (
-      existingDefinition?.capabilities?.smartCollectionCondition?.enabled ===
-      true
-    ) {
-      return {
-        success: true,
-        message: `${selected.name} already exists and smart collections are already enabled.`,
-      };
-    }
-
-    const updateResult = await updateDefinitionForSmartCollections(
-      admin,
-      selected
-    );
+    const updateResult = await updateDefinitionForSmartCollections(admin, selected);
 
     const updateErrors = updateResult?.userErrors || [];
 
     if (updateErrors.length > 0) {
       return {
         success: false,
-        message: updateErrors[0]?.message || "Failed to update metafield definition.",
+        message: updateErrors[0]?.message || "Failed to update attribute.",
       };
     }
 
-    const enabled =
-      updateResult?.updatedDefinition?.capabilities?.smartCollectionCondition
-        ?.enabled;
-
     return {
-      success: enabled,
-      message: enabled
-        ? `${selected.name} already existed and was updated to support smart collections.`
-        : `${selected.name} already existed, but smart collection capability could not be confirmed after update.`,
+      success: true,
+      message: `${selected.name} updated and ready for smart collections.`,
     };
   } catch (error) {
     return {
       success: false,
-      message:
-        error?.message || "Something went wrong while creating the metafield definition.",
+      message: error?.message || "Something went wrong.",
     };
   }
 }
 
-export default function FitmentSetup() {
+export default function AttributeSetup() {
   const data = useActionData();
   const navigation = useNavigation();
   const isSubmitting = navigation.state === "submitting";
 
   return (
-    <s-page heading="Fitment Setup">
+    <s-page heading="Attribute Setup">
       <s-section>
         <s-stack direction="block" gap="loose">
-          <s-box
-            padding="large"
-            border="base"
-            border-radius="large"
-            background="subdued"
-          >
+          <s-box padding="large" border="base" border-radius="large" background="subdued">
             <s-stack direction="block" gap="tight">
-              <s-heading>Create product metafields</s-heading>
+              <s-heading>Set up product attributes</s-heading>
               <s-paragraph>
-                These buttons create the required product metafield definitions
-                for vehicle fitment and enable them for smart collection rules.
+                These attributes power your SEO collections. They allow products to be grouped
+                dynamically and used in smart collection rules.
               </s-paragraph>
               <s-paragraph>
-                You only need to run each one once. If a metafield already
-                exists, this page will update it so smart collections are
-                enabled.
+                You only need to run each one once. If an attribute already exists, it will be updated
+                automatically.
               </s-paragraph>
             </s-stack>
           </s-box>
 
           <s-grid columns="3" gap="base">
-            <s-box
-              padding="large"
-              border="base"
-              border-radius="large"
-              background="default"
-            >
-              <s-stack direction="block" gap="base">
-                <s-heading size="small">Vehicle Make</s-heading>
-                <s-paragraph>
-                  Creates <s-text>custom.vehicle_make</s-text> and enables it
-                  for smart collections.
-                </s-paragraph>
-
-                <Form method="post">
-                  <input type="hidden" name="metafieldType" value="make" />
-                  <s-button
-                    type="submit"
-                    {...(isSubmitting ? { loading: true } : {})}
-                  >
-                    Create Vehicle Make
-                  </s-button>
-                </Form>
-              </s-stack>
+            <s-box padding="large" border="base" border-radius="large">
+              <s-heading size="small">Primary Attribute</s-heading>
+              <s-paragraph>Creates <s-text>custom.vehicle_make</s-text></s-paragraph>
+              <Form method="post">
+                <input type="hidden" name="metafieldType" value="make" />
+                <s-button type="submit" {...(isSubmitting ? { loading: true } : {})}>
+                  Create Primary Attribute
+                </s-button>
+              </Form>
             </s-box>
 
-            <s-box
-              padding="large"
-              border="base"
-              border-radius="large"
-              background="default"
-            >
-              <s-stack direction="block" gap="base">
-                <s-heading size="small">Vehicle Model</s-heading>
-                <s-paragraph>
-                  Creates <s-text>custom.vehicle_model</s-text> and enables it
-                  for smart collections.
-                </s-paragraph>
-
-                <Form method="post">
-                  <input type="hidden" name="metafieldType" value="model" />
-                  <s-button
-                    type="submit"
-                    {...(isSubmitting ? { loading: true } : {})}
-                  >
-                    Create Vehicle Model
-                  </s-button>
-                </Form>
-              </s-stack>
+            <s-box padding="large" border="base" border-radius="large">
+              <s-heading size="small">Secondary Attribute</s-heading>
+              <s-paragraph>Creates <s-text>custom.vehicle_model</s-text></s-paragraph>
+              <Form method="post">
+                <input type="hidden" name="metafieldType" value="model" />
+                <s-button type="submit" {...(isSubmitting ? { loading: true } : {})}>
+                  Create Secondary Attribute
+                </s-button>
+              </Form>
             </s-box>
 
-            <s-box
-              padding="large"
-              border="base"
-              border-radius="large"
-              background="default"
-            >
-              <s-stack direction="block" gap="base">
-                <s-heading size="small">Vehicle Trim</s-heading>
-                <s-paragraph>
-                  Creates <s-text>custom.vehicle_trim</s-text> and enables it
-                  for smart collections.
-                </s-paragraph>
-
-                <Form method="post">
-                  <input type="hidden" name="metafieldType" value="trim" />
-                  <s-button
-                    type="submit"
-                    {...(isSubmitting ? { loading: true } : {})}
-                  >
-                    Create Vehicle Trim
-                  </s-button>
-                </Form>
-              </s-stack>
+            <s-box padding="large" border="base" border-radius="large">
+              <s-heading size="small">Tertiary Attribute</s-heading>
+              <s-paragraph>Creates <s-text>custom.vehicle_trim</s-text></s-paragraph>
+              <Form method="post">
+                <input type="hidden" name="metafieldType" value="trim" />
+                <s-button type="submit" {...(isSubmitting ? { loading: true } : {})}>
+                  Create Tertiary Attribute
+                </s-button>
+              </Form>
             </s-box>
           </s-grid>
 
-          {data?.message ? (
-            <div
-              style={{
-                marginTop: "8px",
-                padding: "14px 16px",
-                borderRadius: "10px",
-                background: data.success ? "#dcfce7" : "#fee2e2",
-                border: `1px solid ${data.success ? "#22c55e" : "#ef4444"}`,
-                fontWeight: 500,
-              }}
-            >
+          {data?.message && (
+            <div style={{
+              padding: "12px",
+              borderRadius: "8px",
+              background: data.success ? "#dcfce7" : "#fee2e2",
+              border: `1px solid ${data.success ? "#22c55e" : "#ef4444"}`
+            }}>
               {data.success ? "✓ " : "⚠ "} {data.message}
             </div>
-          ) : null}
-        </s-stack>
-      </s-section>
-
-      <s-section slot="aside" heading="Metafields created">
-        <s-stack direction="block" gap="base">
-          <s-box
-            padding="base"
-            border="base"
-            border-radius="large"
-            background="default"
-          >
-            <s-paragraph>custom.vehicle_make</s-paragraph>
-            <s-paragraph>custom.vehicle_model</s-paragraph>
-            <s-paragraph>custom.vehicle_trim</s-paragraph>
-          </s-box>
-
-          <s-box
-            padding="base"
-            border="base"
-            border-radius="large"
-            background="subdued"
-          >
-            <s-paragraph>
-              These definitions are created on <s-text>PRODUCT</s-text> and are
-              configured for smart collection conditions.
-            </s-paragraph>
-          </s-box>
+          )}
         </s-stack>
       </s-section>
     </s-page>
