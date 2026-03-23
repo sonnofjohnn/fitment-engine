@@ -10,8 +10,8 @@ import { authenticate } from "../shopify.server";
 import db from "../db.server";
 
 const COLLECTIONS_QUERY = `#graphql
-  query GetCollectionsForStatusCheck($first: Int!) {
-    collections(first: $first, sortKey: TITLE) {
+  query GetCollectionsForStatusCheck($first: Int!, $after: String) {
+    collections(first: $first, after: $after, sortKey: TITLE) {
       nodes {
         id
         title
@@ -28,6 +28,7 @@ const COLLECTIONS_QUERY = `#graphql
       }
       pageInfo {
         hasNextPage
+        endCursor
       }
     }
   }
@@ -196,6 +197,30 @@ async function shopifyGraphQL(admin, query, variables = {}) {
   }
 
   return json;
+}
+
+async function fetchAllCollections(admin) {
+  const allCollections = [];
+  let hasNextPage = true;
+  let after = null;
+
+  while (hasNextPage) {
+    const data = await shopifyGraphQL(admin, COLLECTIONS_QUERY, {
+      first: 250,
+      after,
+    });
+
+    const connection = data?.data?.collections;
+    const nodes = connection?.nodes || [];
+    const pageInfo = connection?.pageInfo || {};
+
+    allCollections.push(...nodes);
+
+    hasNextPage = Boolean(pageInfo.hasNextPage);
+    after = pageInfo.endCursor || null;
+  }
+
+  return allCollections;
 }
 
 async function deleteCollectionIfCreatedAsManual(admin, collectionId) {
@@ -444,12 +469,7 @@ export async function loader({ request }) {
     orderBy: [{ make: "asc" }, { model: "asc" }, { trim: "asc" }],
   });
 
-  const collectionsResponse = await admin.graphql(COLLECTIONS_QUERY, {
-    variables: { first: 250 },
-  });
-
-  const collectionsJson = await collectionsResponse.json();
-  const collections = collectionsJson?.data?.collections?.nodes || [];
+  const collections = await fetchAllCollections(admin);
 
   const collectionMap = new Map(
     collections.map((collection) => [
@@ -497,8 +517,7 @@ export async function loader({ request }) {
   return {
     fitmentOptions: paginatedFitmentOptions,
     collectionCountChecked: collections.length,
-    hasMoreCollections:
-      collectionsJson?.data?.collections?.pageInfo?.hasNextPage || false,
+    hasMoreCollections: false,
     status,
     page: safePage,
     perPage,
@@ -974,7 +993,7 @@ export default function VehicleDataPage() {
           }}
         >
           Checked {collectionCountChecked} collection(s) in Shopify
-          {hasMoreCollections ? " (first 250 only for now)" : ""}.
+          {hasMoreCollections ? " (still loading paginated results)" : ""}.
         </div>
 
         <div
