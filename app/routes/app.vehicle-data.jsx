@@ -357,8 +357,9 @@ async function upsertMenu(admin, title, handle, values) {
   return { action: "updated", handle, title: updated.title };
 }
 
-async function syncMenusFromFitmentOptions(admin) {
+async function syncMenusFromFitmentOptions(admin, shop) {
   const fitmentOptions = await db.fitmentOption.findMany({
+    where: { shop },
     orderBy: [{ make: "asc" }, { model: "asc" }, { trim: "asc" }],
   });
 
@@ -424,6 +425,7 @@ function buildPageUrl(page, status, perPage) {
 
 export async function loader({ request }) {
   const { admin, session } = await authenticate.admin(request);
+  const shop = session.shop;
   const url = new URL(request.url);
 
   const status = url.searchParams.get("status")?.trim() || "all";
@@ -435,9 +437,10 @@ export async function loader({ request }) {
   const perPageParam = Number(url.searchParams.get("perPage") || "25");
   const perPage = allowedPerPage.includes(perPageParam) ? perPageParam : 25;
 
-  const adminStoreHandle = session.shop.replace(".myshopify.com", "");
+  const adminStoreHandle = shop.replace(".myshopify.com", "");
 
   const fitmentOptionsRaw = await db.fitmentOption.findMany({
+    where: { shop },
     orderBy: [{ make: "asc" }, { model: "asc" }, { trim: "asc" }],
   });
 
@@ -515,13 +518,14 @@ export async function loader({ request }) {
 
 export async function action({ request }) {
   const { admin, session } = await authenticate.admin(request);
+  const shop = session.shop;
 
   const formData = await request.formData();
   const actionType = formData.get("actionType");
 
   if (actionType === "syncMenus") {
     try {
-      const results = await syncMenusFromFitmentOptions(admin);
+      const results = await syncMenusFromFitmentOptions(admin, shop);
 
       return {
         success: true,
@@ -552,7 +556,7 @@ export async function action({ request }) {
 
     const handle = buildExpectedCollectionHandle({ make, model, trim });
     const title = buildCollectionTitle({ make, model, trim });
-    const adminStoreHandle = session.shop.replace(".myshopify.com", "");
+    const adminStoreHandle = shop.replace(".myshopify.com", "");
 
     try {
       const defsData = await shopifyGraphQL(
@@ -670,7 +674,7 @@ export async function action({ request }) {
     }
 
     const exists = await db.fitmentOption.findFirst({
-      where: { make, model, trim },
+      where: { shop, make, model, trim },
     });
 
     if (exists) {
@@ -681,7 +685,7 @@ export async function action({ request }) {
     }
 
     await db.fitmentOption.create({
-      data: { make, model, trim },
+      data: { shop, make, model, trim },
     });
 
     return {
@@ -700,9 +704,16 @@ export async function action({ request }) {
       };
     }
 
-    await db.fitmentOption.delete({
-      where: { id },
+    const deleteResult = await db.fitmentOption.deleteMany({
+      where: { id, shop },
     });
+
+    if (deleteResult.count === 0) {
+      return {
+        success: false,
+        message: "Record not found for this shop.",
+      };
+    }
 
     return {
       success: true,
@@ -834,7 +845,7 @@ export default function VehicleDataPage() {
               <div style={{ marginTop: "8px", display: "grid", gap: "6px" }}>
                 {syncFetcher.data.syncResults.map((item, index) => (
                   <div key={`${item.handle}-${index}`}>
-                    {item.action === "created" ? "✓ Created" : "↻ Updated"}: {" "}
+                    {item.action === "created" ? "✓ Created" : "↻ Updated"}:{" "}
                     <code>{item.handle}</code>
                   </div>
                 ))}

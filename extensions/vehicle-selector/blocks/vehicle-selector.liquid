@@ -599,6 +599,10 @@
   "target": "section",
   "settings": [
     {
+      "type": "paragraph",
+      "content": "This selector uses a 3-level menu structure: Makes menu, model menus, and trim menus."
+    },
+    {
       "type": "text",
       "id": "heading",
       "label": "Heading",
@@ -653,19 +657,19 @@
     {
       "type": "text",
       "id": "make_placeholder",
-      "label": "Make placeholder",
+      "label": "Make dropdown placeholder",
       "default": "Select Make"
     },
     {
       "type": "text",
       "id": "model_placeholder",
-      "label": "Model placeholder",
+      "label": "Model dropdown placeholder",
       "default": "Select Model"
     },
     {
       "type": "text",
       "id": "trim_placeholder",
-      "label": "Trim placeholder",
+      "label": "Trim dropdown placeholder",
       "default": "Select Trim"
     },
     {
@@ -677,49 +681,57 @@
     {
       "type": "link_list",
       "id": "makes_menu",
-      "label": "Makes menu"
+      "label": "Makes menu",
+      "info": "Choose the top-level menu that contains your vehicle makes. Example items: Honda, BMW, Nissan."
     },
     {
       "type": "text",
       "id": "models_prefix",
-      "label": "Models prefix",
-      "default": "models-"
+      "label": "Models menu prefix",
+      "default": "models-",
+      "info": "Used to find model menus automatically. Example: if the make is Honda, this looks for a menu named models-honda."
     },
     {
       "type": "text",
       "id": "trims_prefix",
-      "label": "Trims prefix",
-      "default": "trims-"
+      "label": "Trims menu prefix",
+      "default": "trims-",
+      "info": "Used to find trim menus automatically. Example: if the make is Honda and the model is Civic, this looks for a menu named trims-honda-civic."
     },
     {
       "type": "text",
       "id": "collection_suffix",
-      "label": "Collection suffix",
-      "default": "coilovers"
+      "label": "Collection URL suffix",
+      "default": "coilovers",
+      "info": "Optional word added to the end of the collection handle. Example: honda-civic-si-coilovers."
     },
     {
       "type": "checkbox",
       "id": "allow_model_level_fallback",
       "label": "Allow model-level fallback when no trims exist",
-      "default": true
+      "default": true,
+      "info": "If no trim menu exists for a model, the selector can still send customers to the make + model collection."
     },
     {
       "type": "checkbox",
       "id": "auto_redirect",
-      "label": "Auto redirect",
-      "default": false
+      "label": "Auto redirect after final selection",
+      "default": false,
+      "info": "If enabled, customers are redirected automatically after choosing the final option."
     },
     {
       "type": "checkbox",
       "id": "verify_collection_exists",
-      "label": "Verify collection exists",
-      "default": true
+      "label": "Verify collection exists before redirect",
+      "default": true,
+      "info": "Checks whether the collection page is available before redirecting the customer."
     },
     {
       "type": "checkbox",
       "id": "show_messages",
-      "label": "Show messages",
-      "default": true
+      "label": "Show helper messages",
+      "default": true,
+      "info": "Displays messages when models, trims, or matching collections are missing."
     },
     {
       "type": "color",
@@ -769,19 +781,19 @@
     {
       "type": "color",
       "id": "input_background_color",
-      "label": "Input background color",
+      "label": "Dropdown background color",
       "default": "#111111"
     },
     {
       "type": "color",
       "id": "input_text_color",
-      "label": "Input text color",
+      "label": "Dropdown text color",
       "default": "#ffffff"
     },
     {
       "type": "color",
       "id": "input_border_color",
-      "label": "Input border color",
+      "label": "Dropdown border color",
       "default": "#2f2f2f"
     },
     {
@@ -799,7 +811,7 @@
     {
       "type": "range",
       "id": "border_radius",
-      "label": "Border radius",
+      "label": "Corner radius",
       "min": 0,
       "max": 32,
       "step": 2,
@@ -839,7 +851,7 @@
     {
       "type": "range",
       "id": "padding_side",
-      "label": "Left/right padding",
+      "label": "Left and right padding",
       "min": 12,
       "max": 100,
       "step": 4,
@@ -847,15 +859,19 @@
       "default": 36
     },
     {
+      "type": "header",
+      "content": "Messages"
+    },
+    {
       "type": "text",
       "id": "no_models_message",
-      "label": "No models message",
+      "label": "No models found message",
       "default": "No models were found for that make."
     },
     {
       "type": "text",
       "id": "no_trims_message",
-      "label": "No trims message",
+      "label": "No trims found message",
       "default": "No trims were found for that model."
     },
     {

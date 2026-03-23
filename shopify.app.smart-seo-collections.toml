@@ -1,0 +1,18 @@
+# Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
+
+client_id = "53aedcb3199cfdae97103cb978220082"
+name = "Smart SEO Collections"
+application_url = "https://smart-seo-collections.vercel.app"
+embedded = true
+
+[webhooks]
+api_version = "2026-01"
+
+[access_scopes]
+# Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
+scopes = "read_online_store_navigation,write_online_store_navigation,read_products,write_products"
+optional_scopes = [ ]
+use_legacy_install_flow = false
+
+[auth]
+redirect_urls = [ "https://smart-seo-collections.vercel.app/auth/callback" ]

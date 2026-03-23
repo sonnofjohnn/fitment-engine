@@ -287,8 +287,9 @@ async function upsertMenu(admin, title, handle, values) {
   return { action: "updated", handle, title: updated.title };
 }
 
-async function syncMenusFromFitmentOptions(admin) {
+async function syncMenusFromFitmentOptions(admin, shop) {
   const fitmentOptions = await db.fitmentOption.findMany({
+    where: { shop },
     orderBy: [{ make: "asc" }, { model: "asc" }, { trim: "asc" }],
   });
 
@@ -334,9 +335,11 @@ async function syncMenusFromFitmentOptions(admin) {
 }
 
 export const loader = async ({ request }) => {
-  const { admin } = await authenticate.admin(request);
+  const { admin, session } = await authenticate.admin(request);
+  const shop = session.shop;
 
   const fitmentRows = await db.fitmentOption.findMany({
+    where: { shop },
     orderBy: [{ make: "asc" }, { model: "asc" }, { trim: "asc" }],
     select: {
       id: true,
@@ -425,13 +428,15 @@ export const loader = async ({ request }) => {
 };
 
 export async function action({ request }) {
-  const { admin } = await authenticate.admin(request);
+  const { admin, session } = await authenticate.admin(request);
+  const shop = session.shop;
+
   const formData = await request.formData();
   const actionType = formData.get("actionType")?.toString();
 
   if (actionType === "syncMenus") {
     try {
-      const results = await syncMenusFromFitmentOptions(admin);
+      const results = await syncMenusFromFitmentOptions(admin, shop);
 
       return {
         success: true,
@@ -596,7 +601,7 @@ export default function Index() {
             }}
           >
             Manage product attributes, assign data to products, monitor missing information,
-generate SEO collections, and keep Shopify navigation in sync.
+            generate SEO collections, and keep Shopify navigation in sync.
           </div>
 
           <div
@@ -814,7 +819,6 @@ generate SEO collections, and keep Shopify navigation in sync.
               </div>
               <div>
                 <strong>3.</strong> Use <strong>Attribute Assignment</strong> to assign attributes directly to products.
-
               </div>
               <div>
                 <strong>4.</strong> Use the missing-attribute filter to find products that still need data assigned.
