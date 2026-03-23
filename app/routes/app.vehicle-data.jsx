@@ -367,7 +367,7 @@ async function syncMenusFromFitmentOptions(admin) {
 
   const makeNames = [...tree.keys()];
   results.push(
-    await upsertMenu(admin, "Vehicle Makes", "vehicle-makes", makeNames)
+    await upsertMenu(admin, "Primary Attributes", "vehicle-makes", makeNames)
   );
 
   for (const [make, modelsMap] of tree.entries()) {
@@ -377,7 +377,7 @@ async function syncMenusFromFitmentOptions(admin) {
     results.push(
       await upsertMenu(
         admin,
-        `Models for ${make}`,
+        `Secondary Attributes for ${make}`,
         `models-${makeHandle}`,
         modelNames
       )
@@ -391,7 +391,7 @@ async function syncMenusFromFitmentOptions(admin) {
         results.push(
           await upsertMenu(
             admin,
-            `Trims for ${make} ${model}`,
+            `Tertiary Attributes for ${make} ${model}`,
             `trims-${makeHandle}-${modelHandle}`,
             trimNames
           )
@@ -525,7 +525,7 @@ export async function action({ request }) {
 
       return {
         success: true,
-        message: `Menus synced successfully. ${results.length} menu(s) processed.`,
+        message: `Collection menus synced successfully. ${results.length} menu(s) processed.`,
         syncResults: results,
       };
     } catch (error) {
@@ -533,7 +533,7 @@ export async function action({ request }) {
 
       return {
         success: false,
-        message: error.message || "Failed to sync menus.",
+        message: error.message || "Failed to sync collection menus.",
       };
     }
   }
@@ -546,7 +546,7 @@ export async function action({ request }) {
     if (!make || !model) {
       return {
         success: false,
-        message: "Make and model are required to create a collection.",
+        message: "Primary and Secondary attributes are required to create a collection.",
       };
     }
 
@@ -641,7 +641,7 @@ export async function action({ request }) {
 
       return {
         success: true,
-        message: `Smart collection created: ${handle}`,
+        message: `SEO collection created: ${handle}`,
         createdCollectionAdminUrl: buildAdminCollectionUrl(
           adminStoreHandle,
           createdCollection.legacyResourceId
@@ -652,7 +652,7 @@ export async function action({ request }) {
 
       return {
         success: false,
-        message: error.message || "Failed to create smart collection.",
+        message: error.message || "Failed to create SEO collection.",
       };
     }
   }
@@ -665,7 +665,7 @@ export async function action({ request }) {
     if (!make || !model) {
       return {
         success: false,
-        message: "Make and model are required. Trim is optional.",
+        message: "Primary and Secondary attributes are required. Tertiary is optional.",
       };
     }
 
@@ -676,7 +676,7 @@ export async function action({ request }) {
     if (exists) {
       return {
         success: false,
-        message: "That fitment already exists.",
+        message: "That attribute combination already exists.",
       };
     }
 
@@ -686,7 +686,7 @@ export async function action({ request }) {
 
     return {
       success: true,
-      message: "Fitment added.",
+      message: "Attribute combination added.",
     };
   }
 
@@ -742,10 +742,11 @@ export default function VehicleDataPage() {
   const isSyncing = syncFetcher.state !== "idle";
 
   return (
-    <s-page heading="Vehicle Data Manager">
-      <s-section heading="Add vehicle">
+    <s-page heading="Attribute Data">
+      <s-section heading="Add attribute record">
         <s-paragraph>
-          Add make, model, and optional trim combinations used in your selector.
+          Add structured attribute combinations used for product organization,
+          SEO collection generation, and menu syncing.
         </s-paragraph>
 
         {actionData?.message && (
@@ -780,21 +781,18 @@ export default function VehicleDataPage() {
           <input type="hidden" name="actionType" value="create" />
 
           <div style={{ display: "grid", gap: "10px", maxWidth: "400px" }}>
-            <input name="make" placeholder="Make (Nissan)" />
-            <input name="model" placeholder="Model (350z)" />
-            <input
-              name="trim"
-              placeholder="Trim optional (Base, Manual, etc.)"
-            />
+            <input name="make" placeholder="Primary Attribute" />
+            <input name="model" placeholder="Secondary Attribute" />
+            <input name="trim" placeholder="Tertiary Attribute (optional)" />
 
             <s-button type="submit" {...(isSubmitting ? { loading: true } : {})}>
-              Add Fitment
+              Add Attribute Record
             </s-button>
           </div>
         </Form>
       </s-section>
 
-      <s-section heading="Saved vehicles">
+      <s-section heading="Saved attribute records">
         <div style={{ marginBottom: "16px" }}>
           <syncFetcher.Form method="post">
             <input type="hidden" name="actionType" value="syncMenus" />
@@ -802,7 +800,7 @@ export default function VehicleDataPage() {
               type="submit"
               {...(isSyncing ? { loading: true, disabled: true } : {})}
             >
-              {isSyncing ? "Syncing Menus..." : "Sync Menus"}
+              {isSyncing ? "Syncing Collection Menus..." : "Sync Collection Menus"}
             </s-button>
           </syncFetcher.Form>
 
@@ -836,7 +834,7 @@ export default function VehicleDataPage() {
               <div style={{ marginTop: "8px", display: "grid", gap: "6px" }}>
                 {syncFetcher.data.syncResults.map((item, index) => (
                   <div key={`${item.handle}-${index}`}>
-                    {item.action === "created" ? "✓ Created" : "↻ Updated"}:{" "}
+                    {item.action === "created" ? "✓ Created" : "↻ Updated"}: {" "}
                     <code>{item.handle}</code>
                   </div>
                 ))}
@@ -885,7 +883,7 @@ export default function VehicleDataPage() {
               fontWeight: status === "missing" ? 600 : 400,
             }}
           >
-            Show Missing Only
+            Show Missing Collections Only
           </Link>
         </div>
 
@@ -976,12 +974,12 @@ export default function VehicleDataPage() {
           }}
         >
           Showing {totalItems === 0 ? 0 : (page - 1) * perPage + 1}-
-          {Math.min(page * perPage, totalItems)} of {totalItems} fitment row(s).
+          {Math.min(page * perPage, totalItems)} of {totalItems} attribute record(s).
           Page {page} of {totalPages}.
         </div>
 
         {fitmentOptions.length === 0 ? (
-          <s-paragraph>No vehicles found for this filter.</s-paragraph>
+          <s-paragraph>No attribute records found for this filter.</s-paragraph>
         ) : (
           <div style={{ display: "grid", gap: "8px" }}>
             {fitmentOptions.map((item) => (
@@ -1075,7 +1073,7 @@ export default function VehicleDataPage() {
                       <input type="hidden" name="make" value={item.make} />
                       <input type="hidden" name="model" value={item.model} />
                       <input type="hidden" name="trim" value={item.trim || ""} />
-                      <s-button type="submit">Create Smart Collection</s-button>
+                      <s-button type="submit">Create SEO Collection</s-button>
                     </Form>
                   ) : null}
 
@@ -1188,79 +1186,72 @@ export default function VehicleDataPage() {
       </s-section>
 
       <s-section slot="aside" heading="Collection & Menu Notes">
-  <s-paragraph>
-    Use this panel as a quick reference when creating collections manually or
-    syncing menus.
-  </s-paragraph>
+        <s-paragraph>
+          Use this panel as a quick reference when creating collections manually or
+          syncing menus.
+        </s-paragraph>
 
-  <div style={{ fontSize: "14px", lineHeight: 1.7 }}>
-    <div style={{ marginBottom: "12px" }}>
-      <strong>Manual collection rules</strong>
-    </div>
+        <div style={{ fontSize: "14px", lineHeight: 1.7 }}>
+          <div style={{ marginBottom: "12px" }}>
+            <strong>Manual collection rules</strong>
+          </div>
 
-    <div>
-      <strong>1. Collection title:</strong> Use the format{" "}
-      <strong>Make Model Trim Coilovers</strong>
-    </div>
+          <div>
+            <strong>1. Collection title:</strong> Use the format <strong>Primary Secondary Tertiary Coilovers</strong>
+          </div>
 
-    <div>
-      <strong>2. URL handle must match exactly:</strong> The handle must be the
-      exact same handle shown on this page.
-    </div>
+          <div>
+            <strong>2. URL handle must match exactly:</strong> The handle must be the exact same handle shown on this page.
+          </div>
 
-    <div>
-      <strong>3. Use lowercase letters and hyphens only</strong>
-    </div>
+          <div>
+            <strong>3. Use lowercase letters and hyphens only</strong>
+          </div>
 
-    <div>
-      <strong>4. Replace "&amp;" with "and"</strong>
-    </div>
+          <div>
+            <strong>4. Replace "&amp;" with "and"</strong>
+          </div>
 
-    <div>
-      <strong>5. Do not let Shopify auto-generate a different handle</strong>
-    </div>
+          <div>
+            <strong>5. Do not let Shopify auto-generate a different handle</strong>
+          </div>
 
-    <div style={{ marginTop: "10px", color: "#b91c1c" }}>
-      If the final handle does not match exactly, this app will treat the
-      collection as missing.
-    </div>
+          <div style={{ marginTop: "10px", color: "#b91c1c" }}>
+            If the final handle does not match exactly, this app will treat the collection as missing.
+          </div>
 
-    <div style={{ marginTop: "10px", color: "#92400e" }}>
-      Keep in mind: deleting a fitment combination from this page does{" "}
-      <strong>not</strong> delete the Shopify collection.
-    </div>
+          <div style={{ marginTop: "10px", color: "#92400e" }}>
+            Keep in mind: deleting an attribute combination from this page does <strong>not</strong> delete the Shopify collection.
+          </div>
 
-    <div style={{ marginTop: "14px" }}>
-      <strong>Created Smart Collections</strong>
-      <div>
-        Smart collections created by this app are <strong>not published</strong>{" "}
-        automatically.
-      </div>
-      <div>
-        Please open the collection in Shopify Admin, complete your collection
-        data, then add it to your sales channels to publish it.
-      </div>
-    </div>
+          <div style={{ marginTop: "14px" }}>
+            <strong>Created SEO Collections</strong>
+            <div>
+              Collections created by this app are <strong>not published</strong> automatically.
+            </div>
+            <div>
+              Please open the collection in Shopify Admin, complete your collection data, then add it to your sales channels to publish it.
+            </div>
+          </div>
 
-    <div style={{ marginTop: "14px" }}>
-      <strong>Menus</strong>
-      <div>
-        Clicking <strong>"Sync Menus"</strong> will automatically create and
-        update all combination menus for you.
-      </div>
-      <div>
-        Please click sync whenever you add new combinations or trims.
-      </div>
-    </div>
+          <div style={{ marginTop: "14px" }}>
+            <strong>Menus</strong>
+            <div>
+              Clicking <strong>"Sync Collection Menus"</strong> will automatically create and update all menu groups for you.
+            </div>
+            <div>
+              Please click sync whenever you add new attribute combinations.
+            </div>
+          </div>
 
-    <div style={{ marginTop: "14px" }}>
-      <strong>Example handle</strong>
-      <div style={{ fontFamily: "monospace" }}>
-        mazda-miata-na-coilovers
-      </div>
-    </div>
-  </div>
-</s-section>
+          <div style={{ marginTop: "14px" }}>
+            <strong>Example handle</strong>
+            <div style={{ fontFamily: "monospace" }}>
+              mazda-miata-na-coilovers
+            </div>
+          </div>
+        </div>
+      </s-section>
     </s-page>
   );
 }
