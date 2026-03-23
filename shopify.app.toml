@@ -2,12 +2,11 @@
 
 client_id = "708e1ed7c92cb98c1af8e10b261dd688"
 name = "Fitment Engine"
-application_url = "https://example.com"
+application_url = "https://fitment-engine.vercel.app"
 embedded = true
 
 [build]
 automatically_update_urls_on_dev = true
-include_config_on_deploy = true
 
 [webhooks]
 api_version = "2026-04"
@@ -25,7 +24,7 @@ api_version = "2026-04"
 scopes = "read_products,write_products,write_metaobject_definitions,write_metaobjects,write_online_store_navigation"
 
 [auth]
-redirect_urls = [ "https://example.com/api/auth" ]
+redirect_urls = [ "https://fitment-engine.vercel.app/auth/callback" ]
 
 [product.metafields.app.demo_info]
 type = "single_line_text_field"

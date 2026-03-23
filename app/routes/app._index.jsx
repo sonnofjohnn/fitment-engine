@@ -441,7 +441,7 @@ export async function action({ request }) {
     } catch (error) {
       return {
         success: false,
-        message: error?.message || "Failed to sync menus.",
+        message: error?.message || "Failed to Sync Collection Menus.",
       };
     }
   }
@@ -549,7 +549,7 @@ export default function Index() {
   const [lastSynced, setLastSynced] = useState("");
 
   useEffect(() => {
-    const saved = window.localStorage.getItem("vehicleFitmentLastSynced");
+    const saved = window.localStorage.getItem("seoCollectionsLastSynced");
     if (saved) {
       setLastSynced(saved);
     }
@@ -559,14 +559,14 @@ export default function Index() {
     if (actionData?.success && actionData?.syncedAt) {
       setLastSynced(actionData.syncedAt);
       window.localStorage.setItem(
-        "vehicleFitmentLastSynced",
+        "seoCollectionsLastSynced",
         actionData.syncedAt
       );
     }
   }, [actionData]);
 
   return (
-    <s-page heading="Vehicle Fitment Admin">
+    <s-page heading="Smart SEO Collections">
       <s-section>
         <div
           style={{
@@ -585,7 +585,7 @@ export default function Index() {
               color: "#111827",
             }}
           >
-            Vehicle fitment dashboard
+            SEO collections dashboard
           </div>
 
           <div
@@ -595,8 +595,8 @@ export default function Index() {
               marginBottom: "14px",
             }}
           >
-            Manage metafields, assign fitment to products, monitor missing data,
-            create smart collections, and keep Shopify navigation in sync.
+            Manage product attributes, assign data to products, monitor missing information,
+generate SEO collections, and keep Shopify navigation in sync.
           </div>
 
           <div
@@ -620,7 +620,7 @@ export default function Index() {
                 fontWeight: 600,
               }}
             >
-              Fitment Setup
+              Attribute Setup
             </Link>
 
             <Link
@@ -637,7 +637,7 @@ export default function Index() {
                 fontWeight: 600,
               }}
             >
-              Vehicle Data Manager
+              Attribute Data
             </Link>
 
             <Link
@@ -654,7 +654,7 @@ export default function Index() {
                 fontWeight: 600,
               }}
             >
-              Fitment Assignment
+              Attribute Assignment
             </Link>
 
             <Form method="post">
@@ -675,7 +675,7 @@ export default function Index() {
                   opacity: isSyncing ? 0.8 : 1,
                 }}
               >
-                {isSyncing ? "Syncing Menus..." : "Sync Menus"}
+                {isSyncing ? "Syncing Menus..." : "Sync Collection Menus"}
               </button>
             </Form>
           </div>
@@ -716,28 +716,28 @@ export default function Index() {
           }}
         >
           <StatCard
-            label="Missing Fitment"
+            label="Missing Attributes"
             value={stats.missingFitmentCount}
             tone="danger"
             subtext="Current active products missing make and model"
           />
           <StatCard
-            label="Assigned Products"
+            label="Products with Attributes"
             value={stats.assignedFitmentCount}
             tone="success"
             subtext="Current active products with make and model"
           />
           <StatCard
-            label="Vehicle Combinations"
+            label="Attribute Records"
             value={stats.totalVehicleCombinations}
             tone="info"
             subtext="Rows saved in your fitment database"
           />
           <StatCard
-            label="Missing Collections"
+            label="Missing SEO Collections"
             value={stats.missingExpectedCollections}
             tone="warning"
-            subtext="Collections that are currently missing or not matched to your combinations"
+            subtext="Collections that are currently missing or not matched to your combination of attributes"
           />
         </div>
 
@@ -807,27 +807,20 @@ export default function Index() {
 
             <div style={{ color: "#374151", lineHeight: 1.8, fontSize: "14px" }}>
               <div>
-                <strong>1.</strong> Run <strong>Fitment Setup</strong> to create
-                the product metafields and keep them smart-collection ready and
-                filterable.
+                <strong>1.</strong> Run <strong>Attribute Setup</strong> to create the product metafields and keep them smart-collection ready and filterable.
               </div>
               <div>
-                <strong>2.</strong> Use <strong>Vehicle Data Manager</strong> to
-                add or review make / model / trim combinations and create smart
-                collections.
+                <strong>2.</strong> Use <strong>Attribute Data</strong> to add or review structured attribute combinations and create SEO collections.
               </div>
               <div>
-                <strong>3.</strong> Use <strong>Fitment Assignment</strong> to
-                save fitment directly onto products.
+                <strong>3.</strong> Use <strong>Attribute Assignment</strong> to assign attributes directly to products.
+
               </div>
               <div>
-                <strong>4.</strong> Use the missing-fitment filter to find
-                products that still need make or model assigned.
+                <strong>4.</strong> Use the missing-attribute filter to find products that still need data assigned.
               </div>
               <div>
-                <strong>5.</strong> Click <strong>Sync Menus</strong> whenever
-                you add new combinations. Sync Menus will automatically create
-                the menus for you.
+                <strong>5.</strong> Click <strong>Sync Collection Menus</strong> whenever you add new combinations. Menus will be generated automatically.
               </div>
             </div>
           </div>
@@ -853,11 +846,11 @@ export default function Index() {
 
             <div style={{ color: "#374151", lineHeight: 1.8, fontSize: "14px" }}>
               <div>
-                <strong>Missing Fitment</strong> counts active products missing
+                <strong>Missing Attributes</strong> counts active products missing
                 either make or model.
               </div>
               <div>
-                <strong>Missing Collections</strong> compares expected fitment
+                <strong>Missing SEO Collections</strong> compares expected fitment
                 handles from your database against actual Shopify collections.
               </div>
               <div>
