@@ -99,7 +99,8 @@ function uniqueSorted(values) {
 }
 
 export async function loader({ request }) {
-  const { admin } = await authenticate.admin(request);
+  const { admin, session } = await authenticate.admin(request);
+  const shop = session.shop;
   const url = new URL(request.url);
 
   const search = url.searchParams.get("search")?.trim() || "";
@@ -147,6 +148,7 @@ export async function loader({ request }) {
   }));
 
   const fitmentRows = await db.fitmentOption.findMany({
+    where: { shop },
     orderBy: [{ make: "asc" }, { model: "asc" }, { trim: "asc" }],
     select: {
       make: true,
@@ -232,7 +234,8 @@ export async function loader({ request }) {
 }
 
 export async function action({ request }) {
-  const { admin } = await authenticate.admin(request);
+  const { admin, session } = await authenticate.admin(request);
+  const shop = session.shop;
   const formData = await request.formData();
   const actionType = formData.get("actionType")?.toString();
 
@@ -308,6 +311,7 @@ export async function action({ request }) {
 
   const existingFitment = await db.fitmentOption.findFirst({
     where: {
+      shop,
       make: vehicleMake,
       model: vehicleModel,
       trim: vehicleTrim,
@@ -317,6 +321,7 @@ export async function action({ request }) {
   if (!existingFitment) {
     await db.fitmentOption.create({
       data: {
+        shop,
         make: vehicleMake,
         model: vehicleModel,
         trim: vehicleTrim,
