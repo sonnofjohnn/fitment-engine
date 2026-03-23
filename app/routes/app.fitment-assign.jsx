@@ -619,7 +619,7 @@ export default function FitmentAssignPage() {
                 <input
                   name="search"
                   defaultValue={search}
-                  placeholder="350z, Honda, BMW..."
+                  placeholder="Product Title.."
                   style={{
                     width: "100%",
                     padding: "8px",
@@ -635,7 +635,7 @@ export default function FitmentAssignPage() {
                 <input
                   name="tag"
                   defaultValue={tag}
-                  placeholder="coilovers"
+                  placeholder="Shopify Tags"
                   style={{
                     width: "100%",
                     padding: "8px",
