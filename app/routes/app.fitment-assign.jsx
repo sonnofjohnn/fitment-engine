@@ -239,6 +239,118 @@ export async function action({ request }) {
   const formData = await request.formData();
   const actionType = formData.get("actionType")?.toString();
 
+  if (actionType === "assignAll") {
+    const rawPayload = formData.get("payload")?.toString() || "[]";
+    let payload = [];
+
+    try {
+      payload = JSON.parse(rawPayload);
+    } catch {
+      return {
+        success: false,
+        message: "Invalid bulk payload.",
+      };
+    }
+
+    let saved = 0;
+    let skipped = 0;
+    let failed = 0;
+
+    for (const item of payload) {
+      const productId = String(item?.productId || "").trim();
+      const productTitle = String(item?.productTitle || "").trim();
+      const vehicleMake = String(item?.vehicleMake || "").trim();
+      const vehicleModel = String(item?.vehicleModel || "").trim();
+      const vehicleTrim = String(item?.vehicleTrim || "").trim();
+
+      if (!productId || !vehicleMake || !vehicleModel) {
+        skipped++;
+        continue;
+      }
+
+      const metafields = [
+        {
+          ownerId: productId,
+          namespace: "custom",
+          key: "vehicle_make",
+          type: "single_line_text_field",
+          value: vehicleMake,
+        },
+        {
+          ownerId: productId,
+          namespace: "custom",
+          key: "vehicle_model",
+          type: "single_line_text_field",
+          value: vehicleModel,
+        },
+      ];
+
+      if (vehicleTrim) {
+        metafields.push({
+          ownerId: productId,
+          namespace: "custom",
+          key: "vehicle_trim",
+          type: "single_line_text_field",
+          value: vehicleTrim,
+        });
+      }
+
+      try {
+        const response = await admin.graphql(SAVE_METAFIELDS_MUTATION, {
+          variables: { metafields },
+        });
+
+        const result = await response.json();
+        const saveResult = result?.data?.metafieldsSet;
+
+        if (saveResult?.userErrors?.length > 0) {
+          console.error("Bulk assign metafield error:", {
+            productId,
+            productTitle,
+            errors: saveResult.userErrors,
+          });
+          failed++;
+          continue;
+        }
+
+        const existingFitment = await db.fitmentOption.findFirst({
+          where: {
+            shop,
+            make: vehicleMake,
+            model: vehicleModel,
+            trim: vehicleTrim,
+          },
+        });
+
+        if (!existingFitment) {
+          await db.fitmentOption.create({
+            data: {
+              shop,
+              make: vehicleMake,
+              model: vehicleModel,
+              trim: vehicleTrim,
+            },
+          });
+        }
+
+        saved++;
+      } catch (error) {
+        console.error("Bulk assign error:", {
+          productId,
+          productTitle,
+          error,
+        });
+        failed++;
+      }
+    }
+
+    return {
+      success: failed === 0,
+      message: `Assign All complete: ${saved} saved, ${skipped} skipped, ${failed} failed.`,
+      bulkAssigned: true,
+    };
+  }
+
   if (actionType !== "saveFitment") {
     return {
       success: false,
@@ -343,11 +455,14 @@ function ProductTableRow({
   navigation,
   actionData,
   fitmentSuggestions,
+  rowValues,
+  setRowValue,
 }) {
-  const [make, setMake] = useState(product.vehicleMake || "");
-  const [model, setModel] = useState(product.vehicleModel || "");
-  const [trim, setTrim] = useState(product.vehicleTrim || "");
   const [justSaved, setJustSaved] = useState(false);
+
+  const make = rowValues.make;
+  const model = rowValues.model;
+  const trim = rowValues.trim;
 
   const formId = `fitment-form-${product.id}`;
   const makeListId = `make-list-${product.id}`;
@@ -415,31 +530,63 @@ function ProductTableRow({
 
   const handleMakeChange = (e) => {
     const nextMake = e.target.value;
-    setMake(nextMake);
-
     const nextModels = fitmentSuggestions.modelsByMake[nextMake] || [];
+
     if (model && !nextModels.includes(model)) {
-      setModel("");
-      setTrim("");
+      setRowValue(product.id, {
+        make: nextMake,
+        model: "",
+        trim: "",
+      });
       return;
     }
 
     const nextTrims =
       fitmentSuggestions.trimsByMakeModel[`${nextMake}|||${model}`] || [];
+
     if (trim && !nextTrims.includes(trim)) {
-      setTrim("");
+      setRowValue(product.id, {
+        make: nextMake,
+        model,
+        trim: "",
+      });
+      return;
     }
+
+    setRowValue(product.id, {
+      make: nextMake,
+      model,
+      trim,
+    });
   };
 
   const handleModelChange = (e) => {
     const nextModel = e.target.value;
-    setModel(nextModel);
-
     const nextTrims =
       fitmentSuggestions.trimsByMakeModel[`${make}|||${nextModel}`] || [];
+
     if (trim && !nextTrims.includes(trim)) {
-      setTrim("");
+      setRowValue(product.id, {
+        make,
+        model: nextModel,
+        trim: "",
+      });
+      return;
     }
+
+    setRowValue(product.id, {
+      make,
+      model: nextModel,
+      trim,
+    });
+  };
+
+  const handleTrimChange = (e) => {
+    setRowValue(product.id, {
+      make,
+      model,
+      trim: e.target.value,
+    });
   };
 
   return (
@@ -509,7 +656,7 @@ function ProductTableRow({
       <td style={{ ...cellStyle, width: "16%" }}>
         <input
           value={trim}
-          onChange={(e) => setTrim(e.target.value)}
+          onChange={handleTrimChange}
           placeholder="Optional"
           style={inputStyle}
           list={trimListId}
@@ -549,6 +696,55 @@ export default function FitmentAssignPage() {
 
   const actionData = useActionData();
   const navigation = useNavigation();
+
+  const [rowState, setRowState] = useState(() =>
+    Object.fromEntries(
+      products.map((product) => [
+        product.id,
+        {
+          make: product.vehicleMake || "",
+          model: product.vehicleModel || "",
+          trim: product.vehicleTrim || "",
+        },
+      ])
+    )
+  );
+
+  useEffect(() => {
+    setRowState(
+      Object.fromEntries(
+        products.map((product) => [
+          product.id,
+          {
+            make: product.vehicleMake || "",
+            model: product.vehicleModel || "",
+            trim: product.vehicleTrim || "",
+          },
+        ])
+      )
+    );
+  }, [products]);
+
+  const setRowValue = (productId, nextValues) => {
+    setRowState((prev) => ({
+      ...prev,
+      [productId]: nextValues,
+    }));
+  };
+
+  const bulkPayload = JSON.stringify(
+    products.map((product) => ({
+      productId: product.id,
+      productTitle: product.title,
+      vehicleMake: rowState[product.id]?.make || "",
+      vehicleModel: rowState[product.id]?.model || "",
+      vehicleTrim: rowState[product.id]?.trim || "",
+    }))
+  );
+
+  const isBulkSaving =
+    navigation.state === "submitting" &&
+    navigation.formData?.get("actionType") === "assignAll";
 
   return (
     <s-page heading="Attribute Assignment" fullWidth>
@@ -598,7 +794,7 @@ export default function FitmentAssignPage() {
             </div>
 
             <div>
-              • Click <strong>Save</strong> to apply attributes to the product.
+              • Click <strong>Save</strong> to apply attributes to one product, or use <strong>Assign All Visible Products</strong> to save the entire current page at once.
             </div>
 
             <div style={{ marginTop: "8px", color: "#065f46" }}>
@@ -708,6 +904,19 @@ export default function FitmentAssignPage() {
               >
                 Clear
               </Link>
+            </div>
+          </Form>
+
+          <Form method="post">
+            <input type="hidden" name="actionType" value="assignAll" />
+            <input type="hidden" name="payload" value={bulkPayload} />
+            <div style={{ marginBottom: "16px" }}>
+              <s-button
+                type="submit"
+                {...(isBulkSaving ? { loading: true, disabled: true } : {})}
+              >
+                {isBulkSaving ? "Assigning All Visible Products..." : "Assign All Visible Products"}
+              </s-button>
             </div>
           </Form>
 
@@ -846,6 +1055,14 @@ export default function FitmentAssignPage() {
                     navigation={navigation}
                     actionData={actionData}
                     fitmentSuggestions={fitmentSuggestions}
+                    rowValues={
+                      rowState[product.id] || {
+                        make: "",
+                        model: "",
+                        trim: "",
+                      }
+                    }
+                    setRowValue={setRowValue}
                   />
                 ))}
               </tbody>
