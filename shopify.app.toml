@@ -1,7 +1,7 @@
 # Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
 
 client_id = "708e1ed7c92cb98c1af8e10b261dd688"
-name = "Fitment Engine"
+name = "Smart SEO Collections"
 application_url = "https://fitment-engine.vercel.app"
 embedded = true
 
