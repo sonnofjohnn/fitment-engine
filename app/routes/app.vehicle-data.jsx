@@ -860,8 +860,102 @@ function CollectionStatusBadge({ exists, isSmart, labelMissing = "Missing" }) {
         }`,
       }}
     >
-      {exists ? (isSmart ? "Smart collection exists" : "Manual collection exists") : labelMissing}
+      {exists
+        ? isSmart
+          ? "Smart collection exists"
+          : "Manual collection exists"
+        : labelMissing}
     </span>
+  );
+}
+
+function CollectionPanel({
+  title,
+  handle,
+  exists,
+  isSmart,
+  adminUrl,
+  missingLabel,
+  createLevel,
+  make,
+  model,
+  trim = "",
+  createButtonText,
+}) {
+  return (
+    <div
+      style={{
+        border: "1px solid #e5e7eb",
+        borderRadius: "8px",
+        padding: "10px",
+        display: "grid",
+        gap: "8px",
+        background: "#fafafa",
+        minWidth: 0,
+      }}
+    >
+      <div style={{ fontWeight: 600, fontSize: "13px", color: "#111827" }}>
+        {title}
+      </div>
+
+      <div
+        style={{
+          fontSize: "12px",
+          color: "#4b5563",
+          wordBreak: "break-word",
+        }}
+      >
+        Handle: <code>{handle}</code>
+      </div>
+
+      <CollectionStatusBadge
+        exists={exists}
+        isSmart={isSmart}
+        labelMissing={missingLabel}
+      />
+
+      <div
+        style={{
+          display: "flex",
+          gap: "8px",
+          flexWrap: "wrap",
+          alignItems: "center",
+        }}
+      >
+        {!exists ? (
+          <Form method="post">
+            <input type="hidden" name="actionType" value="createCollection" />
+            <input type="hidden" name="level" value={createLevel} />
+            <input type="hidden" name="make" value={make} />
+            <input type="hidden" name="model" value={model} />
+            <input type="hidden" name="trim" value={trim} />
+            <s-button type="submit">{createButtonText}</s-button>
+          </Form>
+        ) : null}
+
+        {exists && adminUrl ? (
+          <a
+            href={adminUrl}
+            target="_blank"
+            rel="noreferrer"
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              padding: "7px 12px",
+              borderRadius: "8px",
+              border: "1px solid #cbd5e1",
+              textDecoration: "none",
+              color: "inherit",
+              background: "white",
+              fontSize: "13px",
+              lineHeight: 1.2,
+            }}
+          >
+            Open in Admin
+          </a>
+        ) : null}
+      </div>
+    </div>
   );
 }
 
@@ -1139,10 +1233,10 @@ export default function VehicleDataPage() {
                 key={item.id}
                 style={{
                   border: "1px solid #ddd",
-                  padding: "10px 12px",
+                  padding: "8px 10px",
                   borderRadius: "8px",
                   display: "grid",
-                  gap: "10px",
+                  gap: "8px",
                 }}
               >
                 <div
@@ -1170,173 +1264,44 @@ export default function VehicleDataPage() {
 
                 <div
                   style={{
-                    border: "1px solid #e5e7eb",
-                    borderRadius: "8px",
-                    padding: "10px",
                     display: "grid",
-                    gap: "8px",
-                    background: "#fafafa",
+                    gridTemplateColumns: item.hasTrimLevel
+                      ? "repeat(2, minmax(0, 1fr))"
+                      : "1fr",
+                    gap: "10px",
+                    alignItems: "start",
                   }}
                 >
-                  <div style={{ fontWeight: 600, fontSize: "13px", color: "#111827" }}>
-                    Make / Model Collection
-                  </div>
-
-                  <div
-                    style={{
-                      fontSize: "12px",
-                      color: "#4b5563",
-                      wordBreak: "break-word",
-                    }}
-                  >
-                    Handle: <code>{item.makeModelHandle}</code>
-                  </div>
-
-                  <CollectionStatusBadge
+                  <CollectionPanel
+                    title="Make / Model Collection"
+                    handle={item.makeModelHandle}
                     exists={item.makeModelCollectionExists}
                     isSmart={item.makeModelCollectionIsSmart}
-                    labelMissing="Make / Model collection missing"
+                    adminUrl={item.makeModelCollectionAdminUrl}
+                    missingLabel="Make / Model collection missing"
+                    createLevel="make-model"
+                    make={item.make}
+                    model={item.model}
+                    trim=""
+                    createButtonText="Create Make / Model"
                   />
 
-                  <div
-                    style={{
-                      display: "flex",
-                      gap: "8px",
-                      flexWrap: "wrap",
-                      alignItems: "center",
-                    }}
-                  >
-                    {!item.makeModelCollectionExists ? (
-                      <Form method="post">
-                        <input
-                          type="hidden"
-                          name="actionType"
-                          value="createCollection"
-                        />
-                        <input type="hidden" name="level" value="make-model" />
-                        <input type="hidden" name="make" value={item.make} />
-                        <input type="hidden" name="model" value={item.model} />
-                        <input type="hidden" name="trim" value="" />
-                        <s-button type="submit">
-                          Create Make / Model Collection
-                        </s-button>
-                      </Form>
-                    ) : null}
-
-                    {item.makeModelCollectionExists &&
-                    item.makeModelCollectionAdminUrl ? (
-                      <a
-                        href={item.makeModelCollectionAdminUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        style={{
-                          display: "inline-flex",
-                          alignItems: "center",
-                          padding: "7px 12px",
-                          borderRadius: "8px",
-                          border: "1px solid #cbd5e1",
-                          textDecoration: "none",
-                          color: "inherit",
-                          background: "white",
-                          fontSize: "13px",
-                          lineHeight: 1.2,
-                        }}
-                      >
-                        Open Make / Model in Admin
-                      </a>
-                    ) : null}
-                  </div>
-                </div>
-
-                {item.hasTrimLevel ? (
-                  <div
-                    style={{
-                      border: "1px solid #e5e7eb",
-                      borderRadius: "8px",
-                      padding: "10px",
-                      display: "grid",
-                      gap: "8px",
-                      background: "#fafafa",
-                    }}
-                  >
-                    <div style={{ fontWeight: 600, fontSize: "13px", color: "#111827" }}>
-                      Make / Model / Trim Collection
-                    </div>
-
-                    <div
-                      style={{
-                        fontSize: "12px",
-                        color: "#4b5563",
-                        wordBreak: "break-word",
-                      }}
-                    >
-                      Handle: <code>{item.makeModelTrimHandle}</code>
-                    </div>
-
-                    <CollectionStatusBadge
+                  {item.hasTrimLevel ? (
+                    <CollectionPanel
+                      title="Make / Model / Trim Collection"
+                      handle={item.makeModelTrimHandle}
                       exists={item.makeModelTrimCollectionExists}
                       isSmart={item.makeModelTrimCollectionIsSmart}
-                      labelMissing="Make / Model / Trim collection missing"
+                      adminUrl={item.makeModelTrimCollectionAdminUrl}
+                      missingLabel="Make / Model / Trim collection missing"
+                      createLevel="make-model-trim"
+                      make={item.make}
+                      model={item.model}
+                      trim={item.trim || ""}
+                      createButtonText="Create Trim Collection"
                     />
-
-                    <div
-                      style={{
-                        display: "flex",
-                        gap: "8px",
-                        flexWrap: "wrap",
-                        alignItems: "center",
-                      }}
-                    >
-                      {!item.makeModelTrimCollectionExists ? (
-                        <Form method="post">
-                          <input
-                            type="hidden"
-                            name="actionType"
-                            value="createCollection"
-                          />
-                          <input
-                            type="hidden"
-                            name="level"
-                            value="make-model-trim"
-                          />
-                          <input type="hidden" name="make" value={item.make} />
-                          <input type="hidden" name="model" value={item.model} />
-                          <input
-                            type="hidden"
-                            name="trim"
-                            value={item.trim || ""}
-                          />
-                          <s-button type="submit">
-                            Create Make / Model / Trim Collection
-                          </s-button>
-                        </Form>
-                      ) : null}
-
-                      {item.makeModelTrimCollectionExists &&
-                      item.makeModelTrimCollectionAdminUrl ? (
-                        <a
-                          href={item.makeModelTrimCollectionAdminUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            padding: "7px 12px",
-                            borderRadius: "8px",
-                            border: "1px solid #cbd5e1",
-                            textDecoration: "none",
-                            color: "inherit",
-                            background: "white",
-                            fontSize: "13px",
-                            lineHeight: 1.2,
-                          }}
-                        >
-                          Open Make / Model / Trim in Admin
-                        </a>
-                      ) : null}
-                    </div>
-                  </div>
-                ) : null}
+                  ) : null}
+                </div>
               </div>
             ))}
           </div>
