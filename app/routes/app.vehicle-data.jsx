@@ -97,7 +97,18 @@ function slugify(value) {
     .replace(/^-+|-+$/g, "");
 }
 
-function buildExpectedCollectionHandle({ make, model, trim }) {
+function buildMakeModelCollectionHandle({ make, model }) {
+  const parts = [];
+
+  if (make) parts.push(slugify(make));
+  if (model) parts.push(slugify(model));
+
+  parts.push("coilovers");
+
+  return parts.join("-");
+}
+
+function buildMakeModelTrimCollectionHandle({ make, model, trim }) {
   const parts = [];
 
   if (make) parts.push(slugify(make));
@@ -448,6 +459,15 @@ function buildPageUrl(page, status, perPage) {
   return `/app/vehicle-data${query ? `?${query}` : ""}`;
 }
 
+function getDefinitionFromConditions(conditions, key) {
+  return conditions.find(
+    (item) =>
+      item.ruleType === "PRODUCT_METAFIELD_DEFINITION" &&
+      item?.ruleObject?.metafieldDefinition?.namespace === "custom" &&
+      item?.ruleObject?.metafieldDefinition?.key === key
+  )?.ruleObject?.metafieldDefinition;
+}
+
 export async function loader({ request }) {
   const { admin, session } = await authenticate.admin(request);
   const shop = session.shop;
@@ -486,25 +506,51 @@ export async function loader({ request }) {
   );
 
   let fitmentOptions = fitmentOptionsRaw.map((item) => {
-    const expectedCollectionHandle = buildExpectedCollectionHandle({
+    const makeModelHandle = buildMakeModelCollectionHandle({
       make: item.make,
       model: item.model,
-      trim: item.trim,
     });
 
-    const matchedCollection = collectionMap.get(expectedCollectionHandle);
+    const makeModelTrimHandle = item.trim
+      ? buildMakeModelTrimCollectionHandle({
+          make: item.make,
+          model: item.model,
+          trim: item.trim,
+        })
+      : null;
+
+    const makeModelMatch = collectionMap.get(makeModelHandle);
+    const makeModelTrimMatch = makeModelTrimHandle
+      ? collectionMap.get(makeModelTrimHandle)
+      : null;
 
     return {
       ...item,
-      expectedCollectionHandle,
-      collectionExists: Boolean(matchedCollection),
-      collectionIsSmart: Boolean(matchedCollection?.isSmart),
-      collectionAdminUrl: matchedCollection?.adminUrl || null,
+      makeModelHandle,
+      makeModelCollectionExists: Boolean(makeModelMatch),
+      makeModelCollectionIsSmart: Boolean(makeModelMatch?.isSmart),
+      makeModelCollectionAdminUrl: makeModelMatch?.adminUrl || null,
+
+      makeModelTrimHandle,
+      makeModelTrimCollectionExists: makeModelTrimHandle
+        ? Boolean(makeModelTrimMatch)
+        : false,
+      makeModelTrimCollectionIsSmart: makeModelTrimHandle
+        ? Boolean(makeModelTrimMatch?.isSmart)
+        : false,
+      makeModelTrimCollectionAdminUrl: makeModelTrimMatch?.adminUrl || null,
+      hasTrimLevel: Boolean(item.trim),
     };
   });
 
   if (status === "missing") {
-    fitmentOptions = fitmentOptions.filter((item) => !item.collectionExists);
+    fitmentOptions = fitmentOptions.filter((item) => {
+      const makeModelMissing = !item.makeModelCollectionExists;
+      const trimLevelMissing =
+        item.hasTrimLevel && !item.makeModelTrimCollectionExists;
+
+      return makeModelMissing || trimLevelMissing;
+    });
   }
 
   const totalItems = fitmentOptions.length;
@@ -565,19 +611,60 @@ export async function action({ request }) {
     const make = formData.get("make")?.toString().trim() || "";
     const model = formData.get("model")?.toString().trim() || "";
     const trim = formData.get("trim")?.toString().trim() || "";
+    const level = formData.get("level")?.toString().trim() || "make-model-trim";
 
     if (!make || !model) {
       return {
         success: false,
-        message: "Primary and Secondary attributes are required to create a collection.",
+        message:
+          "Primary and Secondary attributes are required to create a collection.",
       };
     }
 
-    const handle = buildExpectedCollectionHandle({ make, model, trim });
-    const title = buildCollectionTitle({ make, model, trim });
+    const normalizedTrim = level === "make-model" ? "" : trim;
+
+    if (level === "make-model-trim" && !normalizedTrim) {
+      return {
+        success: false,
+        message:
+          "Tertiary attribute is required when creating a Make / Model / Trim collection.",
+      };
+    }
+
+    const handle =
+      level === "make-model"
+        ? buildMakeModelCollectionHandle({ make, model })
+        : buildMakeModelTrimCollectionHandle({
+            make,
+            model,
+            trim: normalizedTrim,
+          });
+
+    const title = buildCollectionTitle({
+      make,
+      model,
+      trim: normalizedTrim,
+    });
+
     const adminStoreHandle = shop.replace(".myshopify.com", "");
 
     try {
+      const existingCollections = await fetchAllCollections(admin);
+      const existingMatch = existingCollections.find(
+        (collection) => collection.handle === handle
+      );
+
+      if (existingMatch) {
+        return {
+          success: false,
+          message: `A collection with handle "${handle}" already exists.`,
+          createdCollectionAdminUrl: buildAdminCollectionUrl(
+            adminStoreHandle,
+            existingMatch.legacyResourceId
+          ),
+        };
+      }
+
       const defsData = await shopifyGraphQL(
         admin,
         METAFIELD_RULE_DEFINITIONS_QUERY
@@ -585,17 +672,18 @@ export async function action({ request }) {
 
       const conditions = defsData?.data?.collectionRulesConditions || [];
 
-      const getDefinition = (key) =>
-        conditions.find(
-          (item) =>
-            item.ruleType === "PRODUCT_METAFIELD_DEFINITION" &&
-            item?.ruleObject?.metafieldDefinition?.namespace === "custom" &&
-            item?.ruleObject?.metafieldDefinition?.key === key
-        )?.ruleObject?.metafieldDefinition;
-
-      const makeDefinition = getDefinition("vehicle_make");
-      const modelDefinition = getDefinition("vehicle_model");
-      const trimDefinition = getDefinition("vehicle_trim");
+      const makeDefinition = getDefinitionFromConditions(
+        conditions,
+        "vehicle_make"
+      );
+      const modelDefinition = getDefinitionFromConditions(
+        conditions,
+        "vehicle_model"
+      );
+      const trimDefinition = getDefinitionFromConditions(
+        conditions,
+        "vehicle_trim"
+      );
 
       if (!makeDefinition || !modelDefinition) {
         return {
@@ -605,7 +693,7 @@ export async function action({ request }) {
         };
       }
 
-      if (trim && !trimDefinition) {
+      if (normalizedTrim && !trimDefinition) {
         return {
           success: false,
           message:
@@ -616,7 +704,7 @@ export async function action({ request }) {
       const rules = buildSmartCollectionRules({
         make,
         model,
-        trim,
+        trim: normalizedTrim,
         makeDefinitionId: makeDefinition.id,
         modelDefinitionId: modelDefinition.id,
         trimDefinitionId: trimDefinition?.id || null,
@@ -664,7 +752,10 @@ export async function action({ request }) {
 
       return {
         success: true,
-        message: `SEO collection created: ${handle}`,
+        message:
+          level === "make-model"
+            ? `Make / Model SEO collection created: ${handle}`
+            : `Make / Model / Trim SEO collection created: ${handle}`,
         createdCollectionAdminUrl: buildAdminCollectionUrl(
           adminStoreHandle,
           createdCollection.legacyResourceId
@@ -688,7 +779,8 @@ export async function action({ request }) {
     if (!make || !model) {
       return {
         success: false,
-        message: "Primary and Secondary attributes are required. Tertiary is optional.",
+        message:
+          "Primary and Secondary attributes are required. Tertiary is optional.",
       };
     }
 
@@ -741,6 +833,36 @@ export async function action({ request }) {
   }
 
   return { success: false, message: "Invalid action." };
+}
+
+function CollectionStatusBadge({ exists, isSmart, labelMissing = "Missing" }) {
+  return (
+    <span
+      style={{
+        display: "inline-block",
+        padding: "3px 9px",
+        borderRadius: "999px",
+        fontSize: "11px",
+        fontWeight: 600,
+        whiteSpace: "nowrap",
+        background: exists
+          ? isSmart
+            ? "#dcfce7"
+            : "#fef3c7"
+          : "#fee2e2",
+        color: exists
+          ? isSmart
+            ? "#166534"
+            : "#92400e"
+          : "#991b1b",
+        border: `1px solid ${
+          exists ? (isSmart ? "#86efac" : "#fcd34d") : "#fca5a5"
+        }`,
+      }}
+    >
+      {exists ? (isSmart ? "Smart collection exists" : "Manual collection exists") : labelMissing}
+    </span>
+  );
 }
 
 export default function VehicleDataPage() {
@@ -1020,7 +1142,7 @@ export default function VehicleDataPage() {
                   padding: "10px 12px",
                   borderRadius: "8px",
                   display: "grid",
-                  gap: "6px",
+                  gap: "10px",
                 }}
               >
                 <div
@@ -1037,97 +1159,7 @@ export default function VehicleDataPage() {
                       {item.make} / {item.model}
                       {item.trim ? ` / ${item.trim}` : ""}
                     </div>
-
-                    <div
-                      style={{
-                        fontSize: "12px",
-                        color: "#4b5563",
-                        marginTop: "4px",
-                        wordBreak: "break-word",
-                      }}
-                    >
-                      Handle: <code>{item.expectedCollectionHandle}</code>
-                    </div>
                   </div>
-
-                  <span
-                    style={{
-                      display: "inline-block",
-                      padding: "3px 9px",
-                      borderRadius: "999px",
-                      fontSize: "11px",
-                      fontWeight: 600,
-                      whiteSpace: "nowrap",
-                      background: item.collectionExists
-                        ? item.collectionIsSmart
-                          ? "#dcfce7"
-                          : "#fef3c7"
-                        : "#fee2e2",
-                      color: item.collectionExists
-                        ? item.collectionIsSmart
-                          ? "#166534"
-                          : "#92400e"
-                        : "#991b1b",
-                      border: `1px solid ${
-                        item.collectionExists
-                          ? item.collectionIsSmart
-                            ? "#86efac"
-                            : "#fcd34d"
-                          : "#fca5a5"
-                      }`,
-                    }}
-                  >
-                    {item.collectionExists
-                      ? item.collectionIsSmart
-                        ? "Smart collection exists"
-                        : "Manual collection exists"
-                      : "Collection missing"}
-                  </span>
-                </div>
-
-                <div
-                  style={{
-                    display: "flex",
-                    gap: "8px",
-                    flexWrap: "wrap",
-                    alignItems: "center",
-                  }}
-                >
-                  {!item.collectionExists ? (
-                    <Form method="post">
-                      <input
-                        type="hidden"
-                        name="actionType"
-                        value="createCollection"
-                      />
-                      <input type="hidden" name="make" value={item.make} />
-                      <input type="hidden" name="model" value={item.model} />
-                      <input type="hidden" name="trim" value={item.trim || ""} />
-                      <s-button type="submit">Create SEO Collection</s-button>
-                    </Form>
-                  ) : null}
-
-                  {item.collectionExists && item.collectionAdminUrl ? (
-                    <a
-                      href={item.collectionAdminUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        padding: "7px 12px",
-                        borderRadius: "8px",
-                        border: "1px solid #cbd5e1",
-                        textDecoration: "none",
-                        color: "inherit",
-                        background: "white",
-                        fontSize: "13px",
-                        lineHeight: 1.2,
-                      }}
-                    >
-                      Open in Admin
-                    </a>
-                  ) : null}
 
                   <Form method="post">
                     <input type="hidden" name="actionType" value="delete" />
@@ -1135,6 +1167,176 @@ export default function VehicleDataPage() {
                     <s-button type="submit">Delete</s-button>
                   </Form>
                 </div>
+
+                <div
+                  style={{
+                    border: "1px solid #e5e7eb",
+                    borderRadius: "8px",
+                    padding: "10px",
+                    display: "grid",
+                    gap: "8px",
+                    background: "#fafafa",
+                  }}
+                >
+                  <div style={{ fontWeight: 600, fontSize: "13px", color: "#111827" }}>
+                    Make / Model Collection
+                  </div>
+
+                  <div
+                    style={{
+                      fontSize: "12px",
+                      color: "#4b5563",
+                      wordBreak: "break-word",
+                    }}
+                  >
+                    Handle: <code>{item.makeModelHandle}</code>
+                  </div>
+
+                  <CollectionStatusBadge
+                    exists={item.makeModelCollectionExists}
+                    isSmart={item.makeModelCollectionIsSmart}
+                    labelMissing="Make / Model collection missing"
+                  />
+
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: "8px",
+                      flexWrap: "wrap",
+                      alignItems: "center",
+                    }}
+                  >
+                    {!item.makeModelCollectionExists ? (
+                      <Form method="post">
+                        <input
+                          type="hidden"
+                          name="actionType"
+                          value="createCollection"
+                        />
+                        <input type="hidden" name="level" value="make-model" />
+                        <input type="hidden" name="make" value={item.make} />
+                        <input type="hidden" name="model" value={item.model} />
+                        <input type="hidden" name="trim" value="" />
+                        <s-button type="submit">
+                          Create Make / Model Collection
+                        </s-button>
+                      </Form>
+                    ) : null}
+
+                    {item.makeModelCollectionExists &&
+                    item.makeModelCollectionAdminUrl ? (
+                      <a
+                        href={item.makeModelCollectionAdminUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          padding: "7px 12px",
+                          borderRadius: "8px",
+                          border: "1px solid #cbd5e1",
+                          textDecoration: "none",
+                          color: "inherit",
+                          background: "white",
+                          fontSize: "13px",
+                          lineHeight: 1.2,
+                        }}
+                      >
+                        Open Make / Model in Admin
+                      </a>
+                    ) : null}
+                  </div>
+                </div>
+
+                {item.hasTrimLevel ? (
+                  <div
+                    style={{
+                      border: "1px solid #e5e7eb",
+                      borderRadius: "8px",
+                      padding: "10px",
+                      display: "grid",
+                      gap: "8px",
+                      background: "#fafafa",
+                    }}
+                  >
+                    <div style={{ fontWeight: 600, fontSize: "13px", color: "#111827" }}>
+                      Make / Model / Trim Collection
+                    </div>
+
+                    <div
+                      style={{
+                        fontSize: "12px",
+                        color: "#4b5563",
+                        wordBreak: "break-word",
+                      }}
+                    >
+                      Handle: <code>{item.makeModelTrimHandle}</code>
+                    </div>
+
+                    <CollectionStatusBadge
+                      exists={item.makeModelTrimCollectionExists}
+                      isSmart={item.makeModelTrimCollectionIsSmart}
+                      labelMissing="Make / Model / Trim collection missing"
+                    />
+
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: "8px",
+                        flexWrap: "wrap",
+                        alignItems: "center",
+                      }}
+                    >
+                      {!item.makeModelTrimCollectionExists ? (
+                        <Form method="post">
+                          <input
+                            type="hidden"
+                            name="actionType"
+                            value="createCollection"
+                          />
+                          <input
+                            type="hidden"
+                            name="level"
+                            value="make-model-trim"
+                          />
+                          <input type="hidden" name="make" value={item.make} />
+                          <input type="hidden" name="model" value={item.model} />
+                          <input
+                            type="hidden"
+                            name="trim"
+                            value={item.trim || ""}
+                          />
+                          <s-button type="submit">
+                            Create Make / Model / Trim Collection
+                          </s-button>
+                        </Form>
+                      ) : null}
+
+                      {item.makeModelTrimCollectionExists &&
+                      item.makeModelTrimCollectionAdminUrl ? (
+                        <a
+                          href={item.makeModelTrimCollectionAdminUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            padding: "7px 12px",
+                            borderRadius: "8px",
+                            border: "1px solid #cbd5e1",
+                            textDecoration: "none",
+                            color: "inherit",
+                            background: "white",
+                            fontSize: "13px",
+                            lineHeight: 1.2,
+                          }}
+                        >
+                          Open Make / Model / Trim in Admin
+                        </a>
+                      ) : null}
+                    </div>
+                  </div>
+                ) : null}
               </div>
             ))}
           </div>
@@ -1227,23 +1429,29 @@ export default function VehicleDataPage() {
           </div>
 
           <div>
-            <strong>1. Collection title:</strong> Use the format <strong>Primary Secondary Tertiary Coilovers</strong>
+            <strong>1. Make / Model title:</strong> Use the format{" "}
+            <strong>Primary Secondary Coilovers</strong>
           </div>
 
           <div>
-            <strong>2. URL handle must match exactly:</strong> The handle must be the exact same handle shown on this page.
+            <strong>2. Make / Model / Trim title:</strong> Use the format{" "}
+            <strong>Primary Secondary Tertiary Coilovers</strong>
           </div>
 
           <div>
-            <strong>3. Use lowercase letters and hyphens only</strong>
+            <strong>3. URL handle must match exactly:</strong> The handle must be the exact same handle shown on this page.
           </div>
 
           <div>
-            <strong>4. Replace "&amp;" with "and"</strong>
+            <strong>4. Use lowercase letters and hyphens only</strong>
           </div>
 
           <div>
-            <strong>5. Do not let Shopify auto-generate a different handle</strong>
+            <strong>5. Replace "&amp;" with "and"</strong>
+          </div>
+
+          <div>
+            <strong>6. Do not let Shopify auto-generate a different handle</strong>
           </div>
 
           <div style={{ marginTop: "10px", color: "#b91c1c" }}>
@@ -1275,9 +1483,12 @@ export default function VehicleDataPage() {
           </div>
 
           <div style={{ marginTop: "14px" }}>
-            <strong>Example handle</strong>
+            <strong>Example handles</strong>
             <div style={{ fontFamily: "monospace" }}>
-              mazda-miata-na-coilovers
+              honda-civic-coilovers
+            </div>
+            <div style={{ fontFamily: "monospace" }}>
+              honda-civic-ek-coilovers
             </div>
           </div>
         </div>
