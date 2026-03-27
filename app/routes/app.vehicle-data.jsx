@@ -162,8 +162,6 @@ function buildCollectionTitle({ make, model, trim, level = "make-model-trim" }) 
     if (seoTrim) parts.push(String(seoTrim).trim());
   }
 
-  parts.push("Coilovers");
-
   return parts.join(" ");
 }
 
@@ -1431,12 +1429,12 @@ export default function VehicleDataPage() {
 
           <div>
             <strong>1. Make / Model title:</strong> Use the format{" "}
-            <strong>Primary Secondary Coilovers</strong>
+            <strong>Primary Secondary</strong>
           </div>
 
           <div>
             <strong>2. Make / Model / Trim title:</strong> Use the format{" "}
-            <strong>Primary Secondary Tertiary Coilovers</strong>
+            <strong>Primary Secondary Tertiary</strong>
           </div>
 
           <div>
