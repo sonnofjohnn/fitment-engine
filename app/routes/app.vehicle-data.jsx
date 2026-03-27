@@ -97,6 +97,35 @@ function slugify(value) {
     .replace(/^-+|-+$/g, "");
 }
 
+function normalizeTrimForSeo(model, trim) {
+  const rawModel = String(model || "").trim();
+  const rawTrim = String(trim || "").trim();
+
+  if (!rawTrim) return "";
+
+  const modelSlug = slugify(rawModel);
+  const trimSlug = slugify(rawTrim);
+
+  if (!modelSlug || !trimSlug) {
+    return rawTrim;
+  }
+
+  const modelParts = modelSlug.split("-").filter(Boolean);
+  const trimParts = trimSlug.split("-").filter(Boolean);
+
+  const startsWithModel =
+    trimParts.length > modelParts.length &&
+    modelParts.every((part, index) => trimParts[index] === part);
+
+  if (!startsWithModel) {
+    return rawTrim;
+  }
+
+  const cleanedTrimSlug = trimParts.slice(modelParts.length).join("-");
+
+  return cleanedTrimSlug || rawTrim;
+}
+
 function buildMakeModelCollectionHandle({ make, model }) {
   const parts = [];
 
@@ -113,19 +142,25 @@ function buildMakeModelTrimCollectionHandle({ make, model, trim }) {
 
   if (make) parts.push(slugify(make));
   if (model) parts.push(slugify(model));
-  if (trim) parts.push(slugify(trim));
+
+  const seoTrim = normalizeTrimForSeo(model, trim);
+  if (seoTrim) parts.push(slugify(seoTrim));
 
   parts.push("coilovers");
 
   return parts.join("-");
 }
 
-function buildCollectionTitle({ make, model, trim }) {
+function buildCollectionTitle({ make, model, trim, level = "make-model-trim" }) {
   const parts = [];
 
   if (make) parts.push(String(make).trim());
   if (model) parts.push(String(model).trim());
-  if (trim) parts.push(String(trim).trim());
+
+  if (level === "make-model-trim" && trim) {
+    const seoTrim = normalizeTrimForSeo(model, trim);
+    if (seoTrim) parts.push(String(seoTrim).trim());
+  }
 
   parts.push("Coilovers");
 
@@ -621,9 +656,9 @@ export async function action({ request }) {
       };
     }
 
-    const normalizedTrim = level === "make-model" ? "" : trim;
+    const rawTrim = level === "make-model" ? "" : trim;
 
-    if (level === "make-model-trim" && !normalizedTrim) {
+    if (level === "make-model-trim" && !rawTrim) {
       return {
         success: false,
         message:
@@ -637,13 +672,14 @@ export async function action({ request }) {
         : buildMakeModelTrimCollectionHandle({
             make,
             model,
-            trim: normalizedTrim,
+            trim: rawTrim,
           });
 
     const title = buildCollectionTitle({
       make,
       model,
-      trim: normalizedTrim,
+      trim: rawTrim,
+      level,
     });
 
     const adminStoreHandle = shop.replace(".myshopify.com", "");
@@ -693,7 +729,7 @@ export async function action({ request }) {
         };
       }
 
-      if (normalizedTrim && !trimDefinition) {
+      if (rawTrim && !trimDefinition) {
         return {
           success: false,
           message:
@@ -704,7 +740,7 @@ export async function action({ request }) {
       const rules = buildSmartCollectionRules({
         make,
         model,
-        trim: normalizedTrim,
+        trim: rawTrim,
         makeDefinitionId: makeDefinition.id,
         modelDefinitionId: modelDefinition.id,
         trimDefinitionId: trimDefinition?.id || null,
