@@ -547,9 +547,7 @@ export default function Index() {
   const { stats } = useLoaderData();
   const actionData = useActionData();
   const navigation = useNavigation();
-  const isSyncing =
-    navigation.state === "submitting" &&
-    navigation.formData?.get("actionType") === "syncMenus";
+  
 
   const [lastSynced, setLastSynced] = useState("");
 
@@ -662,27 +660,7 @@ export default function Index() {
               Attribute Assignment
             </Link>
 
-            <Form method="post">
-              <input type="hidden" name="actionType" value="syncMenus" />
-              <button
-                type="submit"
-                disabled={isSyncing}
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  padding: "10px 14px",
-                  borderRadius: "8px",
-                  border: "1px solid #111827",
-                  background: "#111827",
-                  color: "white",
-                  fontWeight: 600,
-                  cursor: isSyncing ? "wait" : "pointer",
-                  opacity: isSyncing ? 0.8 : 1,
-                }}
-              >
-                {isSyncing ? "Syncing Menus..." : "Sync Collection Menus"}
-              </button>
-            </Form>
+
           </div>
 
           <div
