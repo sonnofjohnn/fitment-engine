@@ -1289,11 +1289,22 @@ export default function VehicleDataPage() {
                     </div>
                   </div>
 
-                  <Form method="post">
-                    <input type="hidden" name="actionType" value="delete" />
-                    <input type="hidden" name="id" value={item.id} />
-                    <s-button type="submit">Delete</s-button>
-                  </Form>
+                  <Form
+                    method="post"
+                    onSubmit={(e) => {
+                      const confirmed = window.confirm(
+                        "Are you sure you want to delete this attribute record?\n\nThis only removes the data from your app database. It does not delete the Shopify collection."
+                      );
+
+                      if (!confirmed) {
+                        e.preventDefault();
+                      }
+                    }}
+                  >
+  <input type="hidden" name="actionType" value="delete" />
+  <input type="hidden" name="id" value={item.id} />
+  <s-button type="submit">Delete Record</s-button>
+</Form>
                 </div>
 
                 <div
