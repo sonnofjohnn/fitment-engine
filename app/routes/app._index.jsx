@@ -26,6 +26,8 @@ const DASHBOARD_PRODUCTS_PAGE_QUERY = `#graphql
         cursor
         node {
           id
+          title
+          handle
           vehicleMake: metafield(namespace: "custom", key: "vehicle_make") {
             value
           }
@@ -139,10 +141,32 @@ function buildFitmentTree(rows) {
   return makesMap;
 }
 
+function normalizeValue(value) {
+  return String(value || "").trim();
+}
+
 function isMissingRequiredAttributes(product) {
-  const make = String(product?.vehicleMake?.value || "").trim();
-  const model = String(product?.vehicleModel?.value || "").trim();
+  const make = normalizeValue(product?.vehicleMake?.value);
+  const model = normalizeValue(product?.vehicleModel?.value);
   return !make || !model;
+}
+
+function hasRequiredAttributes(product) {
+  return !isMissingRequiredAttributes(product);
+}
+
+function buildAssignedHandleFromProduct(product) {
+  const make = normalizeValue(product?.vehicleMake?.value);
+  const model = normalizeValue(product?.vehicleModel?.value);
+  const trim = normalizeValue(product?.vehicleTrim?.value);
+
+  if (!make || !model) return null;
+
+  return buildExpectedCollectionHandle({
+    make,
+    model,
+    trim,
+  });
 }
 
 async function shopifyGraphQL(admin, query, variables = {}) {
@@ -189,10 +213,12 @@ async function getAllCollections(admin) {
   return allCollections;
 }
 
-async function getMissingFitmentCountExcludingExcluded(admin, excludedSet) {
+async function getDashboardProductStats(admin, excludedSet) {
   let after = null;
   let hasNextPage = true;
-  let missingCount = 0;
+  let missingFitmentCount = 0;
+
+  const assignedHandlesSet = new Set();
 
   while (hasNextPage) {
     const data = await shopifyGraphQL(admin, DASHBOARD_PRODUCTS_PAGE_QUERY, {
@@ -209,8 +235,15 @@ async function getMissingFitmentCountExcludingExcluded(admin, excludedSet) {
       const product = edge?.node;
       if (!product?.id) continue;
       if (excludedSet.has(product.id)) continue;
+
       if (isMissingRequiredAttributes(product)) {
-        missingCount += 1;
+        missingFitmentCount += 1;
+        continue;
+      }
+
+      const handle = buildAssignedHandleFromProduct(product);
+      if (handle) {
+        assignedHandlesSet.add(handle);
       }
     }
 
@@ -218,7 +251,10 @@ async function getMissingFitmentCountExcludingExcluded(admin, excludedSet) {
     after = pageInfo.endCursor || null;
   }
 
-  return missingCount;
+  return {
+    missingFitmentCount,
+    assignedExpectedHandles: [...assignedHandlesSet],
+  };
 }
 
 async function findMenuByHandle(admin, handle) {
@@ -436,28 +472,18 @@ export const loader = async ({ request }) => {
   ]);
 
   const excludedSet = new Set(
-    excludedProducts.map((item) => String(item.productId || "").trim()).filter(Boolean),
+    excludedProducts
+      .map((item) => String(item.productId || "").trim())
+      .filter(Boolean),
   );
-
-  const totalVehicleCombinations = fitmentRows.length;
-
-  const expectedHandles = fitmentRows.map((row) =>
-    buildExpectedCollectionHandle({
-      make: row.make,
-      model: row.model,
-      trim: row.trim,
-    }),
-  );
-
-  const uniqueExpectedHandles = [...new Set(expectedHandles)];
 
   const [
-    missingFitmentCount,
+    dashboardProductStats,
     assignedFitmentCount,
     collectionsData,
     menusData,
   ] = await Promise.all([
-    getMissingFitmentCountExcludingExcluded(admin, excludedSet),
+    getDashboardProductStats(admin, excludedSet),
     getProductsCount(
       admin,
       "status:active AND metafields.custom.vehicle_make:* AND metafields.custom.vehicle_model:*",
@@ -465,6 +491,14 @@ export const loader = async ({ request }) => {
     getAllCollections(admin),
     shopifyGraphQL(admin, MENUS_QUERY, { first: 100 }),
   ]);
+
+  const {
+    missingFitmentCount,
+    assignedExpectedHandles,
+  } = dashboardProductStats;
+
+  const uniqueExpectedHandles = [...new Set(assignedExpectedHandles)];
+  const totalVehicleCombinations = fitmentRows.length;
 
   const collectionMap = new Map(
     collectionsData.map((collection) => [
@@ -514,6 +548,7 @@ export const loader = async ({ request }) => {
       menuCount,
       hasMoreMenus,
       totalShopifyCollections: collectionsData.length,
+      trackedExpectedCollections: uniqueExpectedHandles.length,
     },
   };
 };
@@ -790,7 +825,7 @@ export default function Index() {
             label="Missing Attributes"
             value={stats.missingFitmentCount}
             tone="danger"
-            subtext="Current active products missing attributes, excluding products in the Exclude list"
+            subtext="Current active products missing required attributes, excluding products in the Exclude list"
           />
           <StatCard
             label="Products with Attributes"
@@ -808,7 +843,7 @@ export default function Index() {
             label="Missing SEO Collections"
             value={stats.missingExpectedCollections}
             tone="warning"
-            subtext="Collections that are currently missing or not matched to your combination of attributes"
+            subtext="Missing collections for active non-excluded products that already have assigned attributes"
           />
         </div>
 
@@ -824,19 +859,19 @@ export default function Index() {
             label="Existing Expected Collections"
             value={stats.existingExpectedCollections}
             tone="success"
-            subtext="Current amount of collections that match your combinations"
+            subtext="Matching collections for active non-excluded assigned products"
           />
           <StatCard
             label="Smart Collections"
             value={stats.smartExpectedCollections}
             tone="info"
-            subtext="Amount of smart collections currently in your store"
+            subtext="Tracked expected collections currently set to smart"
           />
           <StatCard
             label="Manual Collections"
             value={stats.manualExpectedCollections}
             tone="warning"
-            subtext="Current amount of collections not set to smart"
+            subtext="Tracked expected collections that exist but are not smart"
           />
           <StatCard
             label="Menus"
@@ -920,8 +955,9 @@ export default function Index() {
                 either make or model, excluding products in the Exclude list.
               </div>
               <div>
-                <strong>Missing SEO Collections</strong> compares expected fitment
-                handles from your database against actual Shopify collections.
+                <strong>Missing SEO Collections</strong> compares expected collection
+                handles from active non-excluded products with assigned attributes
+                against actual Shopify collections.
               </div>
               <div>
                 <strong>Manual Collections</strong> means a matching collection
@@ -933,6 +969,9 @@ export default function Index() {
               </div>
               <div style={{ marginTop: "8px", color: "#6b7280" }}>
                 Total Shopify collections scanned: {stats.totalShopifyCollections}
+              </div>
+              <div style={{ color: "#6b7280" }}>
+                Tracked expected collection handles: {stats.trackedExpectedCollections}
               </div>
             </div>
           </div>
