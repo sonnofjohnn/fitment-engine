@@ -149,12 +149,21 @@ export async function loader({ request }) {
 
   const excludedProducts = await db.assignmentExclusion.findMany({
     where: { shop },
-    select: { productId: true },
+    select: {
+      productId: true,
+      productTitle: true,
+    },
   });
 
   const excludedSet = new Set(excludedProducts.map((item) => item.productId));
 
-  const filteredProducts = products.filter((product) => !excludedSet.has(product.id));
+  let visibleProducts = products;
+
+  if (fitmentStatus === "excluded") {
+    visibleProducts = products.filter((product) => excludedSet.has(product.id));
+  } else {
+    visibleProducts = products.filter((product) => !excludedSet.has(product.id));
+  }
 
   const fitmentRows = await db.fitmentOption.findMany({
     where: { shop },
@@ -227,7 +236,7 @@ export async function loader({ request }) {
     : null;
 
   return {
-    products: filteredProducts,
+    products: visibleProducts,
     search,
     tag,
     pageSize,
@@ -396,6 +405,32 @@ export async function action({ request }) {
     };
   }
 
+  if (actionType === "includeAgain") {
+    const productId = formData.get("productId")?.toString() || "";
+    const productTitle = formData.get("productTitle")?.toString() || "";
+
+    if (!productId) {
+      return {
+        success: false,
+        message: "Missing product ID.",
+      };
+    }
+
+    await db.assignmentExclusion.deleteMany({
+      where: {
+        shop,
+        productId,
+      },
+    });
+
+    return {
+      success: true,
+      message: `"${productTitle}" was added back to attribute assignment.`,
+      productId,
+      includedAgain: true,
+    };
+  }
+
   if (actionType !== "saveFitment") {
     return {
       success: false,
@@ -502,6 +537,7 @@ function ProductTableRow({
   fitmentSuggestions,
   rowValues,
   setRowValue,
+  fitmentStatus,
 }) {
   const [justSaved, setJustSaved] = useState(false);
 
@@ -524,7 +560,8 @@ function ProductTableRow({
       actionData?.success &&
       actionData?.productId === product.id &&
       navigation.state === "idle" &&
-      !actionData?.excluded
+      !actionData?.excluded &&
+      !actionData?.includedAgain
     ) {
       setJustSaved(true);
       const timer = setTimeout(() => setJustSaved(false), 1800);
@@ -716,46 +753,83 @@ function ProductTableRow({
 
       <td style={{ ...cellStyle, width: "12%" }}>
         <div style={{ display: "flex", gap: "6px", flexDirection: "column" }}>
-          <button
-            type="submit"
-            form={formId}
-            disabled={isSavingThisRow}
-            style={saveButtonStyle}
-          >
-            {isSavingThisRow ? "Saving..." : justSaved ? "Saved" : "Save"}
-          </button>
+          {fitmentStatus !== "excluded" ? (
+            <>
+              <button
+                type="submit"
+                form={formId}
+                disabled={isSavingThisRow}
+                style={saveButtonStyle}
+              >
+                {isSavingThisRow ? "Saving..." : justSaved ? "Saved" : "Save"}
+              </button>
 
-          <Form
-            method="post"
-            onSubmit={(e) => {
-              const confirmed = window.confirm(
-                "Exclude this product from attribute assignment?\n\nThis will hide it from this page."
-              );
+              <Form
+                method="post"
+                onSubmit={(e) => {
+                  const confirmed = window.confirm(
+                    "Exclude this product from attribute assignment?\n\nThis will hide it from the normal assignment view."
+                  );
 
-              if (!confirmed) {
-                e.preventDefault();
-              }
-            }}
-          >
-            <input type="hidden" name="actionType" value="exclude" />
-            <input type="hidden" name="productId" value={product.id} />
-            <input type="hidden" name="productTitle" value={product.title} />
+                  if (!confirmed) {
+                    e.preventDefault();
+                  }
+                }}
+              >
+                <input type="hidden" name="actionType" value="exclude" />
+                <input type="hidden" name="productId" value={product.id} />
+                <input type="hidden" name="productTitle" value={product.title} />
 
-            <button
-              type="submit"
-              style={{
-                padding: "6px 10px",
-                borderRadius: "8px",
-                border: "1px solid #fecaca",
-                background: "#fee2e2",
-                color: "#991b1b",
-                fontSize: "12px",
-                cursor: "pointer",
+                <button
+                  type="submit"
+                  style={{
+                    padding: "6px 10px",
+                    borderRadius: "8px",
+                    border: "1px solid #fecaca",
+                    background: "#fee2e2",
+                    color: "#991b1b",
+                    fontSize: "12px",
+                    cursor: "pointer",
+                  }}
+                >
+                  Exclude
+                </button>
+              </Form>
+            </>
+          ) : (
+            <Form
+              method="post"
+              onSubmit={(e) => {
+                const confirmed = window.confirm(
+                  "Add this product back to the normal attribute assignment list?"
+                );
+
+                if (!confirmed) {
+                  e.preventDefault();
+                }
               }}
             >
-              Exclude
-            </button>
-          </Form>
+              <input type="hidden" name="actionType" value="includeAgain" />
+              <input type="hidden" name="productId" value={product.id} />
+              <input type="hidden" name="productTitle" value={product.title} />
+
+              <button
+                type="submit"
+                style={{
+                  padding: "7px 10px",
+                  borderRadius: "8px",
+                  border: "1px solid #bbf7d0",
+                  background: "#dcfce7",
+                  color: "#166534",
+                  fontSize: "12px",
+                  cursor: "pointer",
+                  fontWeight: 600,
+                }}
+              >
+                Include Again
+              </button>
+            </Form>
+          )}
         </div>
       </td>
     </tr>
@@ -870,7 +944,7 @@ export default function FitmentAssignPage() {
             </div>
 
             <div>
-              • Use <strong>Attribute status</strong> to quickly find products missing required data.
+              • Use <strong>Attribute status</strong> to quickly find products missing required data, or open the excluded view to restore hidden products.
             </div>
 
             <div>
@@ -891,7 +965,7 @@ export default function FitmentAssignPage() {
               style={{
                 display: "grid",
                 gap: "12px",
-                gridTemplateColumns: "2fr 1fr 180px 140px",
+                gridTemplateColumns: "2fr 1fr 220px 140px",
                 marginBottom: "16px",
               }}
             >
@@ -943,6 +1017,7 @@ export default function FitmentAssignPage() {
                 >
                   <option value="all">All products</option>
                   <option value="missing">Missing required attributes</option>
+                  <option value="excluded">Excluded products</option>
                 </select>
               </label>
 
@@ -987,18 +1062,20 @@ export default function FitmentAssignPage() {
             </div>
           </Form>
 
-          <Form method="post">
-            <input type="hidden" name="actionType" value="assignAll" />
-            <input type="hidden" name="payload" value={bulkPayload} />
-            <div style={{ marginBottom: "16px" }}>
-              <s-button
-                type="submit"
-                {...(isBulkSaving ? { loading: true, disabled: true } : {})}
-              >
-                {isBulkSaving ? "Assigning All Visible Products..." : "Assign All Visible Products"}
-              </s-button>
-            </div>
-          </Form>
+          {fitmentStatus !== "excluded" ? (
+            <Form method="post">
+              <input type="hidden" name="actionType" value="assignAll" />
+              <input type="hidden" name="payload" value={bulkPayload} />
+              <div style={{ marginBottom: "16px" }}>
+                <s-button
+                  type="submit"
+                  {...(isBulkSaving ? { loading: true, disabled: true } : {})}
+                >
+                  {isBulkSaving ? "Assigning All Visible Products..." : "Assign All Visible Products"}
+                </s-button>
+              </div>
+            </Form>
+          ) : null}
 
           {actionData?.message ? (
             <div
@@ -1026,6 +1103,7 @@ export default function FitmentAssignPage() {
         >
           Showing up to {pageSize} products per page.
           {fitmentStatus === "missing" ? " Filter: Missing required attributes." : ""}
+          {fitmentStatus === "excluded" ? " Filter: Excluded products." : ""}
         </div>
 
         {products.length === 0 ? (
@@ -1143,6 +1221,7 @@ export default function FitmentAssignPage() {
                       }
                     }
                     setRowValue={setRowValue}
+                    fitmentStatus={fitmentStatus}
                   />
                 ))}
               </tbody>
