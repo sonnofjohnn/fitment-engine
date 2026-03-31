@@ -147,6 +147,15 @@ export async function loader({ request }) {
     vehicleTrim: node.vehicleTrim?.value || "",
   }));
 
+  const excludedProducts = await db.assignmentExclusion.findMany({
+    where: { shop },
+    select: { productId: true },
+  });
+
+  const excludedSet = new Set(excludedProducts.map((item) => item.productId));
+
+  const filteredProducts = products.filter((product) => !excludedSet.has(product.id));
+
   const fitmentRows = await db.fitmentOption.findMany({
     where: { shop },
     orderBy: [{ make: "asc" }, { model: "asc" }, { trim: "asc" }],
@@ -218,7 +227,7 @@ export async function loader({ request }) {
     : null;
 
   return {
-    products,
+    products: filteredProducts,
     search,
     tag,
     pageSize,
@@ -351,6 +360,42 @@ export async function action({ request }) {
     };
   }
 
+  if (actionType === "exclude") {
+    const productId = formData.get("productId")?.toString() || "";
+    const productTitle = formData.get("productTitle")?.toString() || "";
+
+    if (!productId) {
+      return {
+        success: false,
+        message: "Missing product ID.",
+      };
+    }
+
+    await db.assignmentExclusion.upsert({
+      where: {
+        shop_productId: {
+          shop,
+          productId,
+        },
+      },
+      update: {
+        productTitle,
+      },
+      create: {
+        shop,
+        productId,
+        productTitle,
+      },
+    });
+
+    return {
+      success: true,
+      message: `Excluded "${productTitle}" from attribute assignment.`,
+      productId,
+      excluded: true,
+    };
+  }
+
   if (actionType !== "saveFitment") {
     return {
       success: false,
@@ -478,7 +523,8 @@ function ProductTableRow({
     if (
       actionData?.success &&
       actionData?.productId === product.id &&
-      navigation.state === "idle"
+      navigation.state === "idle" &&
+      !actionData?.excluded
     ) {
       setJustSaved(true);
       const timer = setTimeout(() => setJustSaved(false), 1800);
@@ -669,14 +715,48 @@ function ProductTableRow({
       </td>
 
       <td style={{ ...cellStyle, width: "12%" }}>
-        <button
-          type="submit"
-          form={formId}
-          disabled={isSavingThisRow}
-          style={saveButtonStyle}
-        >
-          {isSavingThisRow ? "Saving..." : justSaved ? "Saved" : "Save"}
-        </button>
+        <div style={{ display: "flex", gap: "6px", flexDirection: "column" }}>
+          <button
+            type="submit"
+            form={formId}
+            disabled={isSavingThisRow}
+            style={saveButtonStyle}
+          >
+            {isSavingThisRow ? "Saving..." : justSaved ? "Saved" : "Save"}
+          </button>
+
+          <Form
+            method="post"
+            onSubmit={(e) => {
+              const confirmed = window.confirm(
+                "Exclude this product from attribute assignment?\n\nThis will hide it from this page."
+              );
+
+              if (!confirmed) {
+                e.preventDefault();
+              }
+            }}
+          >
+            <input type="hidden" name="actionType" value="exclude" />
+            <input type="hidden" name="productId" value={product.id} />
+            <input type="hidden" name="productTitle" value={product.title} />
+
+            <button
+              type="submit"
+              style={{
+                padding: "6px 10px",
+                borderRadius: "8px",
+                border: "1px solid #fecaca",
+                background: "#fee2e2",
+                color: "#991b1b",
+                fontSize: "12px",
+                cursor: "pointer",
+              }}
+            >
+              Exclude
+            </button>
+          </Form>
+        </div>
       </td>
     </tr>
   );
