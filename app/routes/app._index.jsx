@@ -19,6 +19,32 @@ const PRODUCTS_COUNT_QUERY = `#graphql
   }
 `;
 
+const DASHBOARD_PRODUCTS_PAGE_QUERY = `#graphql
+  query GetDashboardProductsPage($first: Int!, $after: String, $query: String!) {
+    products(first: $first, after: $after, sortKey: TITLE, query: $query) {
+      edges {
+        cursor
+        node {
+          id
+          vehicleMake: metafield(namespace: "custom", key: "vehicle_make") {
+            value
+          }
+          vehicleModel: metafield(namespace: "custom", key: "vehicle_model") {
+            value
+          }
+          vehicleTrim: metafield(namespace: "custom", key: "vehicle_trim") {
+            value
+          }
+        }
+      }
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+    }
+  }
+`;
+
 const COLLECTIONS_PAGE_QUERY = `#graphql
   query GetCollectionsPage($first: Int!, $after: String) {
     collections(first: $first, after: $after, sortKey: TITLE) {
@@ -54,6 +80,15 @@ const MENUS_QUERY = `#graphql
     }
   }
 `;
+
+function requireDbModel(model, modelName) {
+  if (!model) {
+    throw new Error(
+      `Prisma model db.${modelName} is undefined. Check your Prisma schema model name and regenerate Prisma client.`,
+    );
+  }
+  return model;
+}
 
 function slugify(value) {
   return String(value || "")
@@ -104,6 +139,12 @@ function buildFitmentTree(rows) {
   return makesMap;
 }
 
+function isMissingRequiredAttributes(product) {
+  const make = String(product?.vehicleMake?.value || "").trim();
+  const model = String(product?.vehicleModel?.value || "").trim();
+  return !make || !model;
+}
+
 async function shopifyGraphQL(admin, query, variables = {}) {
   const response = await admin.graphql(query, { variables });
   const json = await response.json();
@@ -146,6 +187,38 @@ async function getAllCollections(admin) {
   }
 
   return allCollections;
+}
+
+async function getMissingFitmentCountExcludingExcluded(admin, excludedSet) {
+  let after = null;
+  let hasNextPage = true;
+  let missingCount = 0;
+
+  while (hasNextPage) {
+    const data = await shopifyGraphQL(admin, DASHBOARD_PRODUCTS_PAGE_QUERY, {
+      first: 250,
+      after,
+      query: "status:active",
+    });
+
+    const connection = data?.data?.products;
+    const edges = connection?.edges || [];
+    const pageInfo = connection?.pageInfo || {};
+
+    for (const edge of edges) {
+      const product = edge?.node;
+      if (!product?.id) continue;
+      if (excludedSet.has(product.id)) continue;
+      if (isMissingRequiredAttributes(product)) {
+        missingCount += 1;
+      }
+    }
+
+    hasNextPage = Boolean(pageInfo.hasNextPage);
+    after = pageInfo.endCursor || null;
+  }
+
+  return missingCount;
 }
 
 async function findMenuByHandle(admin, handle) {
@@ -197,7 +270,7 @@ async function createMenu(admin, title, handle, items) {
     throw new Error(
       `menuCreate failed for "${handle}": ${payload.userErrors
         .map((e) => e.message)
-        .join(", ")}`
+        .join(", ")}`,
     );
   }
 
@@ -233,7 +306,7 @@ async function updateMenu(admin, id, title, items) {
     throw new Error(
       `menuUpdate failed: ${payload.userErrors
         .map((e) => e.message)
-        .join(", ")}`
+        .join(", ")}`,
     );
   }
 
@@ -272,7 +345,7 @@ async function upsertMenu(admin, title, handle, values) {
       admin,
       title,
       handle,
-      buildCreateItems(values)
+      buildCreateItems(values),
     );
     return { action: "created", handle, title: created.title };
   }
@@ -281,7 +354,7 @@ async function upsertMenu(admin, title, handle, values) {
     admin,
     existing.id,
     title,
-    buildUpdateItems(values)
+    buildUpdateItems(values),
   );
 
   return { action: "updated", handle, title: updated.title };
@@ -298,7 +371,7 @@ async function syncMenusFromFitmentOptions(admin, shop) {
 
   const makeNames = [...tree.keys()];
   results.push(
-    await upsertMenu(admin, "Vehicle Makes", "vehicle-makes", makeNames)
+    await upsertMenu(admin, "Vehicle Makes", "vehicle-makes", makeNames),
   );
 
   for (const [make, modelsMap] of tree.entries()) {
@@ -310,8 +383,8 @@ async function syncMenusFromFitmentOptions(admin, shop) {
         admin,
         `Models for ${make}`,
         `models-${makeHandle}`,
-        modelNames
-      )
+        modelNames,
+      ),
     );
 
     for (const [model, trimsSet] of modelsMap.entries()) {
@@ -324,8 +397,8 @@ async function syncMenusFromFitmentOptions(admin, shop) {
             admin,
             `Trims for ${make} ${model}`,
             `trims-${makeHandle}-${modelHandle}`,
-            trimNames
-          )
+            trimNames,
+          ),
         );
       }
     }
@@ -338,16 +411,33 @@ export const loader = async ({ request }) => {
   const { admin, session } = await authenticate.admin(request);
   const shop = session.shop;
 
-  const fitmentRows = await db.fitmentOption.findMany({
-    where: { shop },
-    orderBy: [{ make: "asc" }, { model: "asc" }, { trim: "asc" }],
-    select: {
-      id: true,
-      make: true,
-      model: true,
-      trim: true,
-    },
-  });
+  const AssignmentExclusion = requireDbModel(
+    db.assignmentExclusion,
+    "assignmentExclusion",
+  );
+
+  const [fitmentRows, excludedProducts] = await Promise.all([
+    db.fitmentOption.findMany({
+      where: { shop },
+      orderBy: [{ make: "asc" }, { model: "asc" }, { trim: "asc" }],
+      select: {
+        id: true,
+        make: true,
+        model: true,
+        trim: true,
+      },
+    }),
+    AssignmentExclusion.findMany({
+      where: { shop },
+      select: {
+        productId: true,
+      },
+    }),
+  ]);
+
+  const excludedSet = new Set(
+    excludedProducts.map((item) => String(item.productId || "").trim()).filter(Boolean),
+  );
 
   const totalVehicleCombinations = fitmentRows.length;
 
@@ -356,24 +446,25 @@ export const loader = async ({ request }) => {
       make: row.make,
       model: row.model,
       trim: row.trim,
-    })
+    }),
   );
 
   const uniqueExpectedHandles = [...new Set(expectedHandles)];
 
-  const [missingFitmentCount, assignedFitmentCount, collectionsData, menusData] =
-    await Promise.all([
-      getProductsCount(
-        admin,
-        "status:active AND (-metafields.custom.vehicle_make:* OR -metafields.custom.vehicle_model:*)"
-      ),
-      getProductsCount(
-        admin,
-        "status:active AND metafields.custom.vehicle_make:* AND metafields.custom.vehicle_model:*"
-      ),
-      getAllCollections(admin),
-      shopifyGraphQL(admin, MENUS_QUERY, { first: 100 }),
-    ]);
+  const [
+    missingFitmentCount,
+    assignedFitmentCount,
+    collectionsData,
+    menusData,
+  ] = await Promise.all([
+    getMissingFitmentCountExcludingExcluded(admin, excludedSet),
+    getProductsCount(
+      admin,
+      "status:active AND metafields.custom.vehicle_make:* AND metafields.custom.vehicle_model:*",
+    ),
+    getAllCollections(admin),
+    shopifyGraphQL(admin, MENUS_QUERY, { first: 100 }),
+  ]);
 
   const collectionMap = new Map(
     collectionsData.map((collection) => [
@@ -382,7 +473,7 @@ export const loader = async ({ request }) => {
         exists: true,
         isSmart: Boolean(collection?.ruleSet?.rules?.length),
       },
-    ])
+    ]),
   );
 
   let existingExpectedCollections = 0;
@@ -547,7 +638,6 @@ export default function Index() {
   const { stats } = useLoaderData();
   const actionData = useActionData();
   const navigation = useNavigation();
-  
 
   const [lastSynced, setLastSynced] = useState("");
 
@@ -563,7 +653,7 @@ export default function Index() {
       setLastSynced(actionData.syncedAt);
       window.localStorage.setItem(
         "seoCollectionsLastSynced",
-        actionData.syncedAt
+        actionData.syncedAt,
       );
     }
   }, [actionData]);
@@ -659,8 +749,6 @@ export default function Index() {
             >
               Attribute Assignment
             </Link>
-
-
           </div>
 
           <div
@@ -702,7 +790,7 @@ export default function Index() {
             label="Missing Attributes"
             value={stats.missingFitmentCount}
             tone="danger"
-            subtext="Current active products missing attributes (Example. Make Model)"
+            subtext="Current active products missing attributes, excluding products in the Exclude list"
           />
           <StatCard
             label="Products with Attributes"
@@ -829,7 +917,7 @@ export default function Index() {
             <div style={{ color: "#374151", lineHeight: 1.8, fontSize: "14px" }}>
               <div>
                 <strong>Missing Attributes</strong> counts active products missing
-                either make or model.
+                either make or model, excluding products in the Exclude list.
               </div>
               <div>
                 <strong>Missing SEO Collections</strong> compares expected fitment
