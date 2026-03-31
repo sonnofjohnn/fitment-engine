@@ -1294,7 +1294,7 @@ export default function FitmentAssignPage() {
                 padding: "8px 14px",
                 borderRadius: "8px",
                 border: "1px solid #e5e7eb",
-                color: "#9ca3af",
+                color: "#9ea5b1",
                 background: "#f9fafb",
               }}
             >
