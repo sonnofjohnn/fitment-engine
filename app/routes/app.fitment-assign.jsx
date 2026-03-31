@@ -81,7 +81,7 @@ function requireShop(session) {
 function requireDbModel(model, modelName) {
   if (!model) {
     throw new Error(
-      `Prisma model db.${modelName} is undefined. Check your Prisma schema model name and regenerate Prisma client.`
+      `Prisma model db.${modelName} is undefined. Check your Prisma schema model name and regenerate Prisma client.`,
     );
   }
   return model;
@@ -121,7 +121,7 @@ export async function loader({ request }) {
 
   const AssignmentExclusion = requireDbModel(
     db.assignmentExclusion,
-    "assignmentExclusion"
+    "assignmentExclusion",
   );
   const FitmentOption = requireDbModel(db.fitmentOption, "fitmentOption");
 
@@ -140,11 +140,6 @@ export async function loader({ request }) {
   let query = "status:active";
   if (search) query += ` AND title:*${search}*`;
   if (tag) query += ` AND tag:${tag}`;
-
-  if (fitmentStatus === "missing") {
-    query +=
-      " AND (-metafields.custom.vehicle_make:* OR -metafields.custom.vehicle_model:*)";
-  }
 
   const variables = {
     query,
@@ -181,12 +176,17 @@ export async function loader({ request }) {
 
   const excludedSet = new Set(excludedProducts.map((item) => item.productId));
 
-  let visibleProducts = products;
+  let visibleProducts = products.filter((product) => !excludedSet.has(product.id));
+
+  if (fitmentStatus === "missing") {
+    visibleProducts = visibleProducts.filter(
+      (product) =>
+        !product.vehicleMake || !product.vehicleModel || !product.vehicleTrim,
+    );
+  }
 
   if (fitmentStatus === "excluded") {
     visibleProducts = products.filter((product) => excludedSet.has(product.id));
-  } else {
-    visibleProducts = products.filter((product) => !excludedSet.has(product.id));
   }
 
   const fitmentRows = await FitmentOption.findMany({
@@ -229,14 +229,14 @@ export async function loader({ request }) {
     [...modelsByMakeMap.entries()].map(([make, set]) => [
       make,
       [...set].sort((a, b) => a.localeCompare(b)),
-    ])
+    ]),
   );
 
   const trimsByMakeModel = Object.fromEntries(
     [...trimsByMakeModelMap.entries()].map(([key, set]) => [
       key,
       [...set].sort((a, b) => a.localeCompare(b)),
-    ])
+    ]),
   );
 
   const nextPageUrl = pageInfo.hasNextPage
@@ -281,7 +281,7 @@ export async function action({ request }) {
 
   const AssignmentExclusion = requireDbModel(
     db.assignmentExclusion,
-    "assignmentExclusion"
+    "assignmentExclusion",
   );
   const FitmentOption = requireDbModel(db.fitmentOption, "fitmentOption");
 
@@ -785,56 +785,56 @@ function ProductTableRow({
       <td style={{ ...cellStyle, width: "12%" }}>
         <div style={{ display: "flex", gap: "6px", flexDirection: "column" }}>
           {fitmentStatus !== "excluded" ? (
-  <>
-    <button
-      type="submit"
-      form={formId}
-      disabled={isSavingThisRow}
-      style={saveButtonStyle}
-    >
-      {isSavingThisRow ? "Saving..." : justSaved ? "Saved" : "Save"}
-    </button>
+            <>
+              <button
+                type="submit"
+                form={formId}
+                disabled={isSavingThisRow}
+                style={saveButtonStyle}
+              >
+                {isSavingThisRow ? "Saving..." : justSaved ? "Saved" : "Save"}
+              </button>
 
-    {!make && !model ? (
-      <Form
-        method="post"
-        onSubmit={(e) => {
-          const confirmed = window.confirm(
-            "Exclude this product from attribute assignment?\n\nThis will hide it from the normal assignment view."
-          );
+              {!make && !model ? (
+                <Form
+                  method="post"
+                  onSubmit={(e) => {
+                    const confirmed = window.confirm(
+                      "Exclude this product from attribute assignment?\n\nThis will hide it from the normal assignment view.",
+                    );
 
-          if (!confirmed) {
-            e.preventDefault();
-          }
-        }}
-      >
-        <input type="hidden" name="actionType" value="exclude" />
-        <input type="hidden" name="productId" value={product.id} />
-        <input type="hidden" name="productTitle" value={product.title} />
+                    if (!confirmed) {
+                      e.preventDefault();
+                    }
+                  }}
+                >
+                  <input type="hidden" name="actionType" value="exclude" />
+                  <input type="hidden" name="productId" value={product.id} />
+                  <input type="hidden" name="productTitle" value={product.title} />
 
-        <button
-          type="submit"
-          style={{
-            padding: "6px 10px",
-            borderRadius: "8px",
-            border: "1px solid #fecaca",
-            background: "#fee2e2",
-            color: "#991b1b",
-            fontSize: "12px",
-            cursor: "pointer",
-          }}
-        >
-          Exclude
-        </button>
-      </Form>
-    ) : null}
-  </>
-) : (
+                  <button
+                    type="submit"
+                    style={{
+                      padding: "6px 10px",
+                      borderRadius: "8px",
+                      border: "1px solid #fecaca",
+                      background: "#fee2e2",
+                      color: "#991b1b",
+                      fontSize: "12px",
+                      cursor: "pointer",
+                    }}
+                  >
+                    Exclude
+                  </button>
+                </Form>
+              ) : null}
+            </>
+          ) : (
             <Form
               method="post"
               onSubmit={(e) => {
                 const confirmed = window.confirm(
-                  "Add this product back to the normal attribute assignment list?"
+                  "Add this product back to the normal attribute assignment list?",
                 );
 
                 if (!confirmed) {
@@ -893,8 +893,8 @@ export default function FitmentAssignPage() {
           model: product.vehicleModel || "",
           trim: product.vehicleTrim || "",
         },
-      ])
-    )
+      ]),
+    ),
   );
 
   useEffect(() => {
@@ -907,8 +907,8 @@ export default function FitmentAssignPage() {
             model: product.vehicleModel || "",
             trim: product.vehicleTrim || "",
           },
-        ])
-      )
+        ]),
+      ),
     );
   }, [products]);
 
@@ -926,7 +926,7 @@ export default function FitmentAssignPage() {
       vehicleMake: rowState[product.id]?.make || "",
       vehicleModel: rowState[product.id]?.model || "",
       vehicleTrim: rowState[product.id]?.trim || "",
-    }))
+    })),
   );
 
   const isBulkSaving =
