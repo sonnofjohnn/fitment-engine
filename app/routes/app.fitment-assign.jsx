@@ -1032,19 +1032,6 @@ export default function FitmentAssignPage() {
     }));
   };
 
-  const bulkPayload = JSON.stringify(
-    products.map((product) => ({
-      productId: product.id,
-      productTitle: product.title,
-      vehicleMake: rowState[product.id]?.make || "",
-      vehicleModel: rowState[product.id]?.model || "",
-      vehicleTrim: rowState[product.id]?.trim || "",
-    })),
-  );
-
-  const isBulkSaving =
-    navigation.state === "submitting" &&
-    navigation.formData?.get("actionType") === "assignAll";
 
   return (
     <s-page heading="Attribute Assignment" fullWidth>
@@ -1207,21 +1194,6 @@ export default function FitmentAssignPage() {
               </Link>
             </div>
           </Form>
-
-          {fitmentStatus !== "excluded" ? (
-            <Form method="post">
-              <input type="hidden" name="actionType" value="assignAll" />
-              <input type="hidden" name="payload" value={bulkPayload} />
-              <div style={{ marginBottom: "16px" }}>
-                <s-button
-                  type="submit"
-                  {...(isBulkSaving ? { loading: true, disabled: true } : {})}
-                >
-                  {isBulkSaving ? "Assigning All Visible Products..." : "Assign All Visible Products"}
-                </s-button>
-              </div>
-            </Form>
-          ) : null}
 
           {actionData?.message ? (
             <div
