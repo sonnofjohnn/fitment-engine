@@ -70,6 +70,23 @@ const SAVE_METAFIELDS_MUTATION = `#graphql
   }
 `;
 
+function requireShop(session) {
+  const shop = session?.shop?.toString?.().trim?.() || "";
+  if (!shop) {
+    throw new Response("Unauthorized: missing shop", { status: 401 });
+  }
+  return shop;
+}
+
+function requireDbModel(model, modelName) {
+  if (!model) {
+    throw new Error(
+      `Prisma model db.${modelName} is undefined. Check your Prisma schema model name and regenerate Prisma client.`
+    );
+  }
+  return model;
+}
+
 function buildPageUrl({
   search,
   tag,
@@ -100,7 +117,14 @@ function uniqueSorted(values) {
 
 export async function loader({ request }) {
   const { admin, session } = await authenticate.admin(request);
-  const shop = session.shop;
+  const shop = requireShop(session);
+
+  const AssignmentExclusion = requireDbModel(
+    db.assignmentExclusion,
+    "assignmentExclusion"
+  );
+  const FitmentOption = requireDbModel(db.fitmentOption, "fitmentOption");
+
   const url = new URL(request.url);
 
   const search = url.searchParams.get("search")?.trim() || "";
@@ -147,7 +171,7 @@ export async function loader({ request }) {
     vehicleTrim: node.vehicleTrim?.value || "",
   }));
 
-  const excludedProducts = await db.assignmentExclusion.findMany({
+  const excludedProducts = await AssignmentExclusion.findMany({
     where: { shop },
     select: {
       productId: true,
@@ -165,7 +189,7 @@ export async function loader({ request }) {
     visibleProducts = products.filter((product) => !excludedSet.has(product.id));
   }
 
-  const fitmentRows = await db.fitmentOption.findMany({
+  const fitmentRows = await FitmentOption.findMany({
     where: { shop },
     orderBy: [{ make: "asc" }, { model: "asc" }, { trim: "asc" }],
     select: {
@@ -253,7 +277,14 @@ export async function loader({ request }) {
 
 export async function action({ request }) {
   const { admin, session } = await authenticate.admin(request);
-  const shop = session.shop;
+  const shop = requireShop(session);
+
+  const AssignmentExclusion = requireDbModel(
+    db.assignmentExclusion,
+    "assignmentExclusion"
+  );
+  const FitmentOption = requireDbModel(db.fitmentOption, "fitmentOption");
+
   const formData = await request.formData();
   const actionType = formData.get("actionType")?.toString();
 
@@ -331,7 +362,7 @@ export async function action({ request }) {
           continue;
         }
 
-        const existingFitment = await db.fitmentOption.findFirst({
+        const existingFitment = await FitmentOption.findFirst({
           where: {
             shop,
             make: vehicleMake,
@@ -341,7 +372,7 @@ export async function action({ request }) {
         });
 
         if (!existingFitment) {
-          await db.fitmentOption.create({
+          await FitmentOption.create({
             data: {
               shop,
               make: vehicleMake,
@@ -380,7 +411,7 @@ export async function action({ request }) {
       };
     }
 
-    await db.assignmentExclusion.upsert({
+    await AssignmentExclusion.upsert({
       where: {
         shop_productId: {
           shop,
@@ -416,7 +447,7 @@ export async function action({ request }) {
       };
     }
 
-    await db.assignmentExclusion.deleteMany({
+    await AssignmentExclusion.deleteMany({
       where: {
         shop,
         productId,
@@ -501,7 +532,7 @@ export async function action({ request }) {
     };
   }
 
-  const existingFitment = await db.fitmentOption.findFirst({
+  const existingFitment = await FitmentOption.findFirst({
     where: {
       shop,
       make: vehicleMake,
@@ -511,7 +542,7 @@ export async function action({ request }) {
   });
 
   if (!existingFitment) {
-    await db.fitmentOption.create({
+    await FitmentOption.create({
       data: {
         shop,
         make: vehicleMake,
@@ -1294,7 +1325,7 @@ export default function FitmentAssignPage() {
                 padding: "8px 14px",
                 borderRadius: "8px",
                 border: "1px solid #e5e7eb",
-                color: "#9ea5b1",
+                color: "#9ca3af",
                 background: "#f9fafb",
               }}
             >
