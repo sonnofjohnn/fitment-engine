@@ -115,6 +115,105 @@ function uniqueSorted(values) {
     .sort((a, b) => a.localeCompare(b));
 }
 
+function mapProductsFromEdges(edges) {
+  return edges.map(({ node }) => ({
+    id: node.id,
+    title: node.title,
+    handle: node.handle,
+    tags: node.tags || [],
+    vehicleMake: node.vehicleMake?.value || "",
+    vehicleModel: node.vehicleModel?.value || "",
+    vehicleTrim: node.vehicleTrim?.value || "",
+  }));
+}
+
+function isMissingAnyAttribute(product) {
+  return !product.vehicleMake || !product.vehicleModel || !product.vehicleTrim;
+}
+
+async function fetchProductsPage(admin, { query, first, after, last, before }) {
+  const response = await admin.graphql(PRODUCTS_QUERY, {
+    variables: {
+      query,
+      first,
+      after,
+      last,
+      before,
+    },
+  });
+
+  const result = await response.json();
+  const connection = result?.data?.products;
+
+  return {
+    edges: connection?.edges || [],
+    pageInfo: connection?.pageInfo || {},
+  };
+}
+
+async function fetchMissingProductsPage({
+  admin,
+  query,
+  pageSize,
+  startAfter,
+  excludedSet,
+}) {
+  const batchSize = 100;
+  const collected = [];
+  let cursor = startAfter || null;
+  let lastUsedCursor = startAfter || null;
+  let hasMore = true;
+
+  while (collected.length < pageSize && hasMore) {
+    const { edges, pageInfo } = await fetchProductsPage(admin, {
+      query,
+      first: batchSize,
+      after: cursor,
+      last: null,
+      before: null,
+    });
+
+    const products = mapProductsFromEdges(edges);
+
+    for (const product of products) {
+      lastUsedCursor = edges.find((edge) => edge.node.id === product.id)?.cursor || lastUsedCursor;
+
+      if (excludedSet.has(product.id)) continue;
+      if (!isMissingAnyAttribute(product)) continue;
+
+      collected.push(product);
+
+      if (collected.length >= pageSize) {
+        break;
+      }
+    }
+
+    if (!pageInfo.hasNextPage || !pageInfo.endCursor) {
+      hasMore = false;
+    } else {
+      cursor = pageInfo.endCursor;
+    }
+  }
+
+  const nextPageUrl =
+    collected.length >= pageSize && hasMore && lastUsedCursor
+      ? buildPageUrl({
+          search: "",
+          tag: "",
+          pageSize,
+          fitmentStatus: "missing",
+          after: lastUsedCursor,
+        })
+      : null;
+
+  return {
+    products: collected,
+    nextCursor: lastUsedCursor,
+    hasMore,
+    nextPageUrl,
+  };
+}
+
 export async function loader({ request }) {
   const { admin, session } = await authenticate.admin(request);
   const shop = requireShop(session);
@@ -141,31 +240,6 @@ export async function loader({ request }) {
   if (search) query += ` AND title:*${search}*`;
   if (tag) query += ` AND tag:${tag}`;
 
-  const variables = {
-    query,
-    first: before ? null : pageSize,
-    after: before ? null : after || null,
-    last: before ? pageSize : null,
-    before: before || null,
-  };
-
-  const response = await admin.graphql(PRODUCTS_QUERY, { variables });
-  const result = await response.json();
-
-  const connection = result?.data?.products;
-  const edges = connection?.edges || [];
-  const pageInfo = connection?.pageInfo || {};
-
-  const products = edges.map(({ node }) => ({
-    id: node.id,
-    title: node.title,
-    handle: node.handle,
-    tags: node.tags || [],
-    vehicleMake: node.vehicleMake?.value || "",
-    vehicleModel: node.vehicleModel?.value || "",
-    vehicleTrim: node.vehicleTrim?.value || "",
-  }));
-
   const excludedProducts = await AssignmentExclusion.findMany({
     where: { shop },
     select: {
@@ -176,17 +250,76 @@ export async function loader({ request }) {
 
   const excludedSet = new Set(excludedProducts.map((item) => item.productId));
 
-  let visibleProducts = products.filter((product) => !excludedSet.has(product.id));
+  let products = [];
+  let nextPageUrl = null;
+  let previousPageUrl = null;
 
   if (fitmentStatus === "missing") {
-    visibleProducts = visibleProducts.filter(
-      (product) =>
-        !product.vehicleMake || !product.vehicleModel || !product.vehicleTrim,
-    );
-  }
+    const missingResult = await fetchMissingProductsPage({
+      admin,
+      query,
+      pageSize,
+      startAfter: after || null,
+      excludedSet,
+    });
 
-  if (fitmentStatus === "excluded") {
-    visibleProducts = products.filter((product) => excludedSet.has(product.id));
+    products = missingResult.products;
+
+    nextPageUrl =
+      products.length >= pageSize && missingResult.hasMore && missingResult.nextCursor
+        ? buildPageUrl({
+            search,
+            tag,
+            pageSize,
+            fitmentStatus,
+            after: missingResult.nextCursor,
+          })
+        : null;
+
+    previousPageUrl = null;
+  } else {
+    const variables = {
+      query,
+      first: before ? null : pageSize,
+      after: before ? null : after || null,
+      last: before ? pageSize : null,
+      before: before || null,
+    };
+
+    const response = await admin.graphql(PRODUCTS_QUERY, { variables });
+    const result = await response.json();
+
+    const connection = result?.data?.products;
+    const edges = connection?.edges || [];
+    const pageInfo = connection?.pageInfo || {};
+
+    const fetchedProducts = mapProductsFromEdges(edges);
+
+    if (fitmentStatus === "excluded") {
+      products = fetchedProducts.filter((product) => excludedSet.has(product.id));
+    } else {
+      products = fetchedProducts.filter((product) => !excludedSet.has(product.id));
+    }
+
+    nextPageUrl = pageInfo.hasNextPage
+      ? buildPageUrl({
+          search,
+          tag,
+          pageSize,
+          fitmentStatus,
+          after: pageInfo.endCursor,
+        })
+      : null;
+
+    previousPageUrl = pageInfo.hasPreviousPage
+      ? buildPageUrl({
+          search,
+          tag,
+          pageSize,
+          fitmentStatus,
+          before: pageInfo.startCursor,
+        })
+      : null;
   }
 
   const fitmentRows = await FitmentOption.findMany({
@@ -239,28 +372,8 @@ export async function loader({ request }) {
     ]),
   );
 
-  const nextPageUrl = pageInfo.hasNextPage
-    ? buildPageUrl({
-        search,
-        tag,
-        pageSize,
-        fitmentStatus,
-        after: pageInfo.endCursor,
-      })
-    : null;
-
-  const previousPageUrl = pageInfo.hasPreviousPage
-    ? buildPageUrl({
-        search,
-        tag,
-        pageSize,
-        fitmentStatus,
-        before: pageInfo.startCursor,
-      })
-    : null;
-
   return {
-    products: visibleProducts,
+    products,
     search,
     tag,
     pageSize,
