@@ -672,26 +672,6 @@ function formatLastSynced(value) {
 export default function Index() {
   const { stats } = useLoaderData();
   const actionData = useActionData();
-  const navigation = useNavigation();
-
-  const [lastSynced, setLastSynced] = useState("");
-
-  useEffect(() => {
-    const saved = window.localStorage.getItem("seoCollectionsLastSynced");
-    if (saved) {
-      setLastSynced(saved);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (actionData?.success && actionData?.syncedAt) {
-      setLastSynced(actionData.syncedAt);
-      window.localStorage.setItem(
-        "seoCollectionsLastSynced",
-        actionData.syncedAt,
-      );
-    }
-  }, [actionData]);
 
   return (
     <s-page heading="Smart SEO Collections">
@@ -786,16 +766,6 @@ export default function Index() {
             </Link>
           </div>
 
-          <div
-            style={{
-              marginTop: "12px",
-              fontSize: "13px",
-              color: "#6b7280",
-            }}
-          >
-            Last synced: {formatLastSynced(lastSynced)}
-          </div>
-
           {actionData?.message ? (
             <div
               style={{
@@ -816,7 +786,7 @@ export default function Index() {
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+            gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
             gap: "12px",
             marginBottom: "20px",
           }}
@@ -839,18 +809,12 @@ export default function Index() {
             tone="info"
             subtext="Rows saved in your attribute database"
           />
-          <StatCard
-            label="Missing SEO Collections"
-            value={stats.missingExpectedCollections}
-            tone="warning"
-            subtext="Missing collections for active non-excluded products that already have assigned attributes"
-          />
         </div>
 
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+            gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
             gap: "12px",
             marginBottom: "20px",
           }}
@@ -866,22 +830,6 @@ export default function Index() {
             value={stats.smartExpectedCollections}
             tone="info"
             subtext="Tracked expected collections currently set to smart"
-          />
-          <StatCard
-            label="Manual Collections"
-            value={stats.manualExpectedCollections}
-            tone="warning"
-            subtext="Tracked expected collections that exist but are not smart"
-          />
-          <StatCard
-            label="Menus"
-            value={stats.menuCount}
-            tone="default"
-            subtext={
-              stats.hasMoreMenus
-                ? "First 100 menus loaded for dashboard"
-                : "Navigation menus currently found"
-            }
           />
         </div>
 
@@ -955,17 +903,12 @@ export default function Index() {
                 either make or model, excluding products in the Exclude list.
               </div>
               <div>
-                <strong>Missing SEO Collections</strong> compares expected collection
-                handles from active non-excluded products with assigned attributes
-                against actual Shopify collections.
+                <strong>Existing Expected Collections</strong> shows matching collections
+                for active non-excluded products with assigned attributes.
               </div>
               <div>
-                <strong>Manual Collections</strong> means a matching collection
-                exists, but it is not currently smart.
-              </div>
-              <div>
-                <strong>Menus</strong> shows current navigation count from
-                Shopify.
+                <strong>Smart Collections</strong> shows tracked expected collections
+                that are currently set to smart.
               </div>
               <div style={{ marginTop: "8px", color: "#6b7280" }}>
                 Total Shopify collections scanned: {stats.totalShopifyCollections}
