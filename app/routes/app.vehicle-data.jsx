@@ -289,22 +289,44 @@ async function deleteCollectionIfCreatedAsManual(admin, collectionId) {
 
 async function findMenuByHandle(admin, handle) {
   const query = `#graphql
-    query FindMenusForExactHandleMatch {
-      menus(first: 100) {
+    query FindMenusByHandle($first: Int!, $after: String) {
+      menus(first: $first, after: $after) {
         nodes {
           id
           title
           handle
           isDefault
         }
+        pageInfo {
+          hasNextPage
+          endCursor
+        }
       }
     }
   `;
 
-  const data = await shopifyGraphQL(admin, query);
-  const menus = data?.data?.menus?.nodes || [];
+  let after = null;
+  let hasNextPage = true;
 
-  return menus.find((menu) => menu.handle === handle) || null;
+  while (hasNextPage) {
+    const data = await shopifyGraphQL(admin, query, {
+      first: 250,
+      after,
+    });
+
+    const connection = data?.data?.menus;
+    const menus = connection?.nodes || [];
+    const match = menus.find((menu) => menu.handle === handle);
+
+    if (match) {
+      return match;
+    }
+
+    hasNextPage = Boolean(connection?.pageInfo?.hasNextPage);
+    after = connection?.pageInfo?.endCursor || null;
+  }
+
+  return null;
 }
 
 async function createMenu(admin, title, handle, items) {
@@ -1301,10 +1323,10 @@ export default function VehicleDataPage() {
                       }
                     }}
                   >
-  <input type="hidden" name="actionType" value="delete" />
-  <input type="hidden" name="id" value={item.id} />
-  <s-button type="submit">Delete Record</s-button>
-</Form>
+                    <input type="hidden" name="actionType" value="delete" />
+                    <input type="hidden" name="id" value={item.id} />
+                    <s-button type="submit">Delete Record</s-button>
+                  </Form>
                 </div>
 
                 <div
